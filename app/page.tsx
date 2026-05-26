@@ -17,6 +17,13 @@ import RetroBusiness from '../components/RetroBusiness';
 import MiniMap from '../components/MiniMap';
 import splashImg from '../src/assets/images/new_greenwood_splash_1779631301817.png';
 
+// Enhanced Visuals & Gameplay imports
+import WeatherOverlay from '../components/WeatherOverlay';
+import CrtFrame from '../components/CrtFrame';
+import CraftingWorkshop from '../components/CraftingWorkshop';
+import TradingDesk from '../components/TradingDesk';
+import RestorationManager from '../components/RestorationManager';
+
 // --- TYPEWRITER SCI-FI RETRO EFFECT MODULE ---
 const TypeWriterText: React.FC<{ text: string; speed?: number }> = ({ text, speed = 12 }) => {
   const [displayedText, setDisplayedText] = useState('');
@@ -412,6 +419,12 @@ export default function HomeView() {
   const [activeResourceTooltip, setActiveResourceTooltip] = useState<'bswx' | 'rep' | 'lp' | 'stamina' | 'weather' | 'heritage' | null>(null);
   const [showFaintScreen, setShowFaintScreen] = useState(false);
 
+  // --- CHIPTUNE SYNTH MUSIC BOX STATES ---
+  const [chiptunePlaying, setChiptunePlaying] = useState(false);
+  const [activeTrack, setActiveTrack] = useState<'ragtime' | 'blues' | 'none'>('none');
+  const beatIndexRef = useRef<number>(0);
+  const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
+
   // --- CHARACTER CUSTOMIZATION ---
   const [charName, setCharName] = useState('Pioneer');
   const [charSkin, setCharSkin] = useState('espresso');
@@ -499,6 +512,13 @@ export default function HomeView() {
   const [visitedCoordinates, setVisitedCoordinates] = useState<string[]>([]);
   const [discoveredLandmarks, setDiscoveredLandmarks] = useState<string[]>([]);
   const [restoredLandmarks, setRestoredLandmarks] = useState<string[]>([]);
+
+  // Upgraded Gameplay States
+  const [sharesGurl, setSharesGurl] = useState(0);
+  const [sharesShal, setSharesShal] = useState(0);
+  const [sharesSreg, setSharesSreg] = useState(0);
+  const [landmarkStages, setLandmarkStages] = useState<Record<string, number>>({});
+  const [activeEvent, setActiveEvent] = useState<{ title: string; desc: string; timer: number; type: 'storm' | 'boom' | 'parade' | null } | null>(null);
   const [priceHistory, setPriceHistory] = useState<Record<string, number[]>>({
     wood: [12.5],
     stone: [14.0],
@@ -781,12 +801,101 @@ export default function HomeView() {
         gain.gain.setValueAtTime(effectiveVol * 0.5, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
         osc.start();
-        osc.stop(ctx.currentTime + 0.2);
       }
     } catch {
       // Audio context failure guard
     }
   };
+
+  // --- RETRO CHIPTUNE MELODIES & SYNTH PLAYER ---
+  const RAGTIME_TRACK = [
+    261.63, 0, 329.63, 0, 392.00, 0, 523.25, 0,
+    392.00, 0, 329.63, 0, 261.63, 392.00, 0, 0,
+    293.66, 0, 349.23, 0, 392.00, 0, 587.33, 0,
+    392.00, 0, 349.23, 0, 293.66, 392.00, 0, 0,
+    329.63, 0, 392.00, 0, 440.00, 0, 659.25, 0,
+    440.00, 0, 392.00, 0, 329.63, 440.00, 0, 0,
+    261.63, 329.63, 392.00, 523.25, 392.00, 329.63, 261.63, 0,
+    392.00, 0, 392.00, 0, 523.25, 0, 0, 0
+  ];
+
+  const BLUES_TRACK = [
+    220.00, 0, 277.18, 0, 329.63, 0, 392.00, 0,
+    440.00, 0, 392.00, 0, 329.63, 0, 277.18, 0,
+    220.00, 0, 277.18, 0, 329.63, 0, 392.00, 0,
+    440.00, 0, 392.00, 0, 329.63, 0, 277.18, 0,
+    293.66, 0, 349.23, 0, 440.00, 0, 523.25, 0,
+    587.33, 0, 523.25, 0, 440.00, 0, 349.23, 0,
+    220.00, 0, 277.18, 0, 329.63, 0, 392.00, 0,
+    329.63, 0, 293.66, 0, 220.00, 0, 0, 0
+  ];
+
+  const playMelodyNote = (freq: number, duration = 0.18, oscType: OscillatorType = 'triangle') => {
+    if (isMuted || freq === 0) return;
+    try {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      osc.type = oscType;
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+
+      gainNode.gain.setValueAtTime(0, ctx.currentTime);
+      gainNode.gain.linearRampToValueAtTime(masterVolume * 0.18, ctx.currentTime + 0.015);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      osc.start();
+      osc.stop(ctx.currentTime + duration);
+    } catch {
+      // Guarded
+    }
+  };
+
+  useEffect(() => {
+    if (intervalIdRef.current) {
+      clearInterval(intervalIdRef.current);
+      intervalIdRef.current = null;
+    }
+
+    if (chiptunePlaying && activeTrack !== 'none') {
+      const melody = activeTrack === 'ragtime' ? RAGTIME_TRACK : BLUES_TRACK;
+      const bpm = activeTrack === 'ragtime' ? 140 : 110;
+      const stepDuration = 60 / bpm / 2;
+
+      intervalIdRef.current = setInterval(() => {
+        const idx = beatIndexRef.current;
+        const freq = melody[idx];
+        beatIndexRef.current = (idx + 1) % melody.length;
+        if (freq > 0) {
+          playMelodyNote(freq, stepDuration * 0.9, activeTrack === 'ragtime' ? 'triangle' : 'square');
+        }
+      }, stepDuration * 1000);
+
+      if (bgAudioRef.current) {
+        bgAudioRef.current.pause();
+      }
+    } else {
+      if (bgAudioRef.current && !isMuted) {
+        bgAudioRef.current.play().catch(() => {});
+      }
+    }
+
+    return () => {
+      if (intervalIdRef.current) {
+        clearInterval(intervalIdRef.current);
+        intervalIdRef.current = null;
+      }
+    };
+  }, [chiptunePlaying, activeTrack, masterVolume, isMuted]);
 
   // Ambient Looping Background Synthetic Lull
   const startBackgroundSoundtrack = () => {
@@ -979,7 +1088,8 @@ export default function HomeView() {
         mapGrid, apprentices, cottagesCount, heritageCatalystTime,
         visitedCoordinates, discoveredLandmarks, paidRespectsToday,
         restoredLandmarks, apprenticeSpeedLvl, apprenticeOutputLvl,
-        civicFavors
+        civicFavors,
+        sharesGurl, sharesShal, sharesSreg, landmarkStages
       };
       localStorage.setItem('BWS_EMPIRE_SAVE_V2', JSON.stringify(payload));
       addLog("District saved to LocalStorage safely.");
@@ -1046,6 +1156,11 @@ export default function HomeView() {
           setApprenticeSpeedLvl(parsed.apprenticeSpeedLvl ?? 1);
           setApprenticeOutputLvl(parsed.apprenticeOutputLvl ?? 1);
           setPaidRespectsToday(parsed.paidRespectsToday ?? {});
+          
+          setSharesGurl(parsed.sharesGurl ?? 0);
+          setSharesShal(parsed.sharesShal ?? 0);
+          setSharesSreg(parsed.sharesSreg ?? 0);
+          setLandmarkStages(parsed.landmarkStages ?? {});
 
           if (parsed.civicFavors && parsed.civicFavors.length > 0) {
             setCivicFavors(parsed.civicFavors);
@@ -1077,7 +1192,8 @@ export default function HomeView() {
     charName, charSkin, charHair, clothing, charAccessory, charGender, charArchetype, charOrigin, charHeirloom,
     wood, stone, clay, ceramics, polishedPlank, reinforcedBrick, bswx, reputation, legacyPoints, stamina,
     questStageGurley, questStageRector, questStageStradford, questStageGerumba, mapGrid, apprentices, cottagesCount, heritageCatalystTime,
-    visitedCoordinates, discoveredLandmarks, paidRespectsToday, restoredLandmarks, apprenticeSpeedLvl, apprenticeOutputLvl
+    visitedCoordinates, discoveredLandmarks, paidRespectsToday, restoredLandmarks, apprenticeSpeedLvl, apprenticeOutputLvl,
+    sharesGurl, sharesShal, sharesSreg, landmarkStages
   ]);
 
   // Custom static arrays of advisors
@@ -1139,6 +1255,37 @@ export default function HomeView() {
     const clock = setInterval(() => {
       // Update system timestamp
       setCurrentSystemTime(Date.now());
+
+      // Decrement/trigger random events
+      setActiveEvent(currentEvent => {
+        if (currentEvent) {
+          const nextTime = currentEvent.timer - 1;
+          if (nextTime <= 0) {
+            addLog(`🔔 Event Completed: "${currentEvent.title}" has ended.`);
+            return null;
+          }
+          return { ...currentEvent, timer: nextTime };
+        }
+        if (Math.random() < 0.008) {
+          const rolls = [
+            { title: "Cooperative Economic Boom", desc: "Cooperative market trade surges! Passive business revenue yields +50% for 60s.", timer: 60, type: "boom" },
+            { title: "Heavy Weather Windstorm", desc: "Gales sweep Greenwood! Double stamina cost to harvest, but logs salvage scattered around the map.", timer: 45, type: "storm" },
+            { title: "Historic Commerce Parade", desc: "Parade day! Apprentice travel movement rates are doubled for 60s.", timer: 60, type: "parade" }
+          ] as const;
+          const selectedRoll = rolls[Math.floor(Math.random() * rolls.length)];
+          addLog(`🔔 Event Triggered: "${selectedRoll.title}"! ${selectedRoll.desc}`);
+          playRetroTone('level', 1.3);
+          return selectedRoll;
+        }
+        return null;
+      });
+
+      // Passive stamina restore from AME Church stages
+      const churchLvl = landmarkStages.ame_church || 0;
+      if (churchLvl > 0) {
+        setStamina(st => Math.min(maxStamina, st + churchLvl * 0.3));
+      }
+
       // 1. Heritage catalyst duration decrements
       if (heritageCatalystTime > 0) {
         setHeritageCatalystTime(prev => prev - 1);
@@ -1147,31 +1294,42 @@ export default function HomeView() {
       // 2. Cooldown cycles
       setMapGrid(prevGrid => {
         if (!prevGrid || !prevGrid.length) return prevGrid;
-        return prevGrid.map(row => row.map(tile => {
-          let updated = { ...tile };
-          if (updated.cooldownRemaining && updated.cooldownRemaining > 0) {
-            const nextCD = updated.cooldownRemaining - 1;
-            if (nextCD <= 0) {
-              updated.cooldownRemaining = 0;
-              updated.isStump = false;
-              updated.isRubble = false;
-            } else {
-              updated.cooldownRemaining = nextCD;
+        let gridChanged = false;
+        const newGrid = prevGrid.map(row => {
+          let rowChanged = false;
+          const newRow = row.map(tile => {
+            if ((tile.cooldownRemaining && tile.cooldownRemaining > 0) || (tile.isConstructing && tile.constructionTimer !== undefined)) {
+              let updated = { ...tile };
+              if (updated.cooldownRemaining && updated.cooldownRemaining > 0) {
+                const nextCD = updated.cooldownRemaining - 1;
+                if (nextCD <= 0) {
+                  updated.cooldownRemaining = 0;
+                  updated.isStump = false;
+                  updated.isRubble = false;
+                } else {
+                  updated.cooldownRemaining = nextCD;
+                }
+              }
+              if (updated.isConstructing && updated.constructionTimer !== undefined) {
+                const nextTimer = updated.constructionTimer - 1;
+                if (nextTimer <= 0) {
+                  updated.isConstructing = false;
+                  updated.constructionTimer = 0;
+                  updated.type = updated.businessId === 'cottage' ? 'cottage' : 'built_business';
+                  playRetroTone('level', 1.5);
+                } else {
+                  updated.constructionTimer = nextTimer;
+                }
+              }
+              rowChanged = true;
+              return updated;
             }
-          }
-          if (updated.isConstructing && updated.constructionTimer !== undefined) {
-            const nextTimer = updated.constructionTimer - 1;
-            if (nextTimer <= 0) {
-              updated.isConstructing = false;
-              updated.constructionTimer = 0;
-              updated.type = updated.businessId === 'cottage' ? 'cottage' : 'built_business';
-              playRetroTone('level', 1.5);
-            } else {
-              updated.constructionTimer = nextTimer;
-            }
-          }
-          return updated;
-        }));
+            return tile;
+          });
+          if (rowChanged) gridChanged = true;
+          return rowChanged ? newRow : row;
+        });
+        return gridChanged ? newGrid : prevGrid;
       });
 
       // 3. Passive commercial monetary output loops
@@ -1309,6 +1467,33 @@ export default function HomeView() {
         return prevApps.map(app => {
           let updated = { ...app };
           
+          if (app.role === 'craftsman') {
+            if (updated.actionTimer === undefined || updated.actionTimer <= 0) {
+              updated.actionTimer = 10;
+            } else {
+              updated.actionTimer -= 1;
+              if (updated.actionTimer <= 0) {
+                if (app.type === 'wood' && wood >= 10) {
+                  setWood(w => w - 10);
+                  setPolishedPlank(p => p + 1);
+                  addLog("Automated Crafting: Apprentice refined 10 Wood -> 1 Polished Plank.");
+                  playRetroTone('success', 0.5);
+                } else if (app.type === 'stone' && stone >= 10) {
+                  setStone(s => s - 10);
+                  setReinforcedBrick(b => b + 1);
+                  addLog("Automated Crafting: Apprentice refined 10 Stone -> 1 Reinforced Brick.");
+                  playRetroTone('success', 0.5);
+                } else if (app.type === 'clay' && clay >= 10) {
+                  setClay(c => c - 10);
+                  setCeramics(cer => cer + 1);
+                  addLog("Automated Crafting: Apprentice refined 10 Clay -> 1 Fine Ceramic.");
+                  playRetroTone('success', 0.5);
+                }
+              }
+            }
+            return updated;
+          }
+          
           if (updated.state === 'idle') {
             // Locate nearest active node coordinates
             let bestDist = Infinity;
@@ -1353,17 +1538,24 @@ export default function HomeView() {
               spawnApprenticeParticles(updated.targetX, updated.targetY, updated.type);
             } else {
               // Steps closer Manhattan path find
-              if (dx !== 0) {
-                const nextTile = mapGrid[updated.y]?.[updated.x + dx];
-                if (nextTile && nextTile.type === 'grass') {
-                  updated.x += dx;
-                } else if (dy !== 0) {
-                  updated.y += dy;
-                }
-              } else if (dy !== 0) {
-                const nextTile = mapGrid[updated.y + dy]?.[updated.x];
-                if (nextTile && nextTile.type === 'grass') {
-                  updated.y += dy;
+              const walkSpeed = (activeEvent && activeEvent.type === 'parade') ? 2 : 1;
+              for (let step = 0; step < walkSpeed; step++) {
+                const stepDx = Math.sign(updated.targetX - updated.x);
+                const stepDy = Math.sign(updated.targetY - updated.y);
+                const stepIsAdj = (Math.abs(updated.targetX - updated.x) + Math.abs(updated.targetY - updated.y)) <= 1;
+                if (stepIsAdj) break;
+                if (stepDx !== 0) {
+                  const nextTile = mapGrid[updated.y]?.[updated.x + stepDx];
+                  if (nextTile && nextTile.type === 'grass') {
+                    updated.x += stepDx;
+                  } else if (stepDy !== 0) {
+                    updated.y += stepDy;
+                  }
+                } else if (stepDy !== 0) {
+                  const nextTile = mapGrid[updated.y + stepDy]?.[updated.x];
+                  if (nextTile && nextTile.type === 'grass') {
+                    updated.y += stepDy;
+                  }
                 }
               }
             }
@@ -1375,18 +1567,26 @@ export default function HomeView() {
               // Trigger node depletion
               setMapGrid(prevGrid => {
                 if (!prevGrid || !prevGrid.length) return prevGrid;
-                return prevGrid.map(row => row.map(tile => {
-                  if (tile.x === updated.targetX && tile.y === updated.targetY) {
-                    return {
-                      ...tile,
-                      isStump: updated.type === 'wood' ? true : tile.isStump,
-                      isRubble: updated.type === 'stone' ? true : tile.isRubble,
-                      isSilt: updated.type === 'clay' ? true : tile.isSilt,
-                      cooldownRemaining: 30 // precisely thirty seconds
-                    };
-                  }
-                  return tile;
-                }));
+                let gridChanged = false;
+                const nextGrid = prevGrid.map(row => {
+                  let rowChanged = false;
+                  const newRow = row.map(tile => {
+                    if (tile.x === updated.targetX && tile.y === updated.targetY) {
+                      rowChanged = true;
+                      return {
+                        ...tile,
+                        isStump: updated.type === 'wood' ? true : tile.isStump,
+                        isRubble: updated.type === 'stone' ? true : tile.isRubble,
+                        isSilt: updated.type === 'clay' ? true : tile.isSilt,
+                        cooldownRemaining: 30 // precisely thirty seconds
+                      };
+                    }
+                    return tile;
+                  });
+                  if (rowChanged) gridChanged = true;
+                  return rowChanged ? newRow : row;
+                });
+                return gridChanged ? nextGrid : prevGrid;
               });
 
               // Add inventory materials
@@ -1436,9 +1636,9 @@ export default function HomeView() {
 
   // Particle updates loop for arcing physics gravity
   useEffect(() => {
-    if (burstParticles.length === 0) return;
     const pTimer = setInterval(() => {
       setBurstParticles(prev => {
+        if (prev.length === 0) return prev;
         return prev
           .map(p => ({
             ...p,
@@ -1451,7 +1651,7 @@ export default function HomeView() {
       });
     }, 40);
     return () => clearInterval(pTimer);
-  }, [burstParticles]);
+  }, []);
 
   // --- CONTRACT A NEW APPRENTICE ---
   const hireApprentice = (type: 'wood' | 'stone' | 'clay') => {
@@ -3446,6 +3646,92 @@ export default function HomeView() {
                 playRetroTone('strike', 0.2);
               }}
             />
+
+            {/* 🎛️ RETRO CHIPTUNE MUSIC BOX */}
+            <div id="retro_music_box" className="p-3.5 bg-[#0a0a0d]/98 border-2 border-yellow-500/30 rounded-xl space-y-3 shadow-2xl">
+              <div className="border-b border-yellow-500/20 pb-2 flex justify-between items-center select-none">
+                <span className="text-xs font-black text-yellow-405 font-mono uppercase tracking-wider flex items-center gap-1.5">
+                  📻 CHIPTUNE MUSIC BOX
+                </span>
+                {chiptunePlaying && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                )}
+              </div>
+
+              <div className="flex justify-center items-center gap-4 py-2 bg-black/60 rounded border border-white/5 relative overflow-hidden select-none">
+                <RotateCw 
+                  size={16} 
+                  className={`text-yellow-400/80 transition-transform ${chiptunePlaying ? 'animate-spin' : 'opacity-30'}`} 
+                  style={{ animationDuration: activeTrack === 'ragtime' ? '2.5s' : '3.8s' }} 
+                />
+                <div className="flex flex-col items-center">
+                  <span className="text-[7.5px] font-mono text-zinc-550 tracking-wider">ACTIVE DECK</span>
+                  <span className="text-[9px] font-mono font-black text-white uppercase tracking-wider truncate max-w-[120px]">
+                    {activeTrack === 'ragtime' ? "🎹 Ragtime Lull" : activeTrack === 'blues' ? "🎷 Slow Blues" : "💤 SILENT DECK"}
+                  </span>
+                </div>
+                <RotateCw 
+                  size={16} 
+                  className={`text-yellow-400/80 transition-transform ${chiptunePlaying ? 'animate-spin' : 'opacity-30'}`} 
+                  style={{ animationDuration: activeTrack === 'ragtime' ? '2.5s' : '3.8s' }} 
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5 text-[8.5px] font-mono">
+                <button
+                  type="button"
+                  onClick={() => {
+                    playRetroTone('success', 0.5);
+                    setActiveTrack('ragtime');
+                    setChiptunePlaying(true);
+                  }}
+                  className={`py-1 rounded text-center border font-bold uppercase cursor-pointer transition-all ${
+                    activeTrack === 'ragtime' && chiptunePlaying
+                      ? 'bg-yellow-600 border-yellow-500 text-black font-black' 
+                      : 'bg-zinc-950 border-white/5 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  RAGTIME
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    playRetroTone('success', 0.5);
+                    setActiveTrack('blues');
+                    setChiptunePlaying(true);
+                  }}
+                  className={`py-1 rounded text-center border font-bold uppercase cursor-pointer transition-all ${
+                    activeTrack === 'blues' && chiptunePlaying
+                      ? 'bg-yellow-600 border-yellow-500 text-black font-black' 
+                      : 'bg-zinc-950 border-white/5 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  BLUES
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    playRetroTone('strike', 0.5);
+                    setChiptunePlaying(false);
+                    setActiveTrack('none');
+                  }}
+                  className={`py-1 rounded text-center border font-bold uppercase cursor-pointer transition-all ${
+                    activeTrack === 'none' || !chiptunePlaying
+                      ? 'bg-zinc-800 border-zinc-700 text-gray-300' 
+                      : 'bg-zinc-950 border-white/5 text-red-400 hover:text-red-300'
+                  }`}
+                >
+                  STOP
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between text-[8px] font-mono text-gray-500 pt-1 select-none">
+                <span className="flex items-center gap-1">
+                  🔊 VOL: {Math.round(masterVolume * 100)}%
+                </span>
+                <span className="text-[7.5px] tracking-tight">WEB AUDIO SYNTH PROTOCOL</span>
+              </div>
+            </div>
             
             {/* VIEWPORT CONSOLE SELECTIONS */}
             <div id="inspector_ledger_panel" className="p-4 bg-[#09090c]/95 border-2 border-yellow-500/30 rounded-xl space-y-3 shadow-xl">

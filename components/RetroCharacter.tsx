@@ -625,6 +625,12 @@ export default function RetroCharacter({
             <stop offset="100%" stopColor={grad.dark} />
           </linearGradient>
 
+          {/* 32-bit fabric overlay pattern */}
+          <pattern id="fabricOverlay" width="4" height="4" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="4" x2="4" y2="0" stroke="rgba(0,0,0,0.15)" strokeWidth="0.55" />
+            <line x1="0" y1="0" x2="4" y2="4" stroke="rgba(255,255,255,0.08)" strokeWidth="0.3" />
+          </pattern>
+
           {/* Golden chain premium shine */}
           <linearGradient id="goldShine" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#ca8a04" />
@@ -778,6 +784,7 @@ export default function RetroCharacter({
         <g transform={`translate(0, ${torsoY}) skewX(${torsoSkew})`}>
           <g className={isMoving ? "animate-walk-bob-torso" : ""}>
             <rect x="30" y="51" width="40" height="24" rx="5" fill={clothingHex} />
+            <rect x="30" y="51" width="40" height="24" rx="5" fill="url(#fabricOverlay)" />
             {/* Edge Specular Outline */}
             <rect x="30" y="51" width="40" height="2" fill="#ffffff" opacity="0.15" />
 

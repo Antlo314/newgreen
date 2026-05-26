@@ -318,6 +318,33 @@ export default function RetroBusiness({
             <stop offset="50%" stopColor="#38bdf8" stopOpacity="0.5" />
             <stop offset="100%" stopColor="#0369a1" stopOpacity="0.8" />
           </linearGradient>
+
+          {/* 32-Bit Texture Overlays */}
+          <pattern id="brickOverlay" width="8" height="6" patternUnits="userSpaceOnUse">
+            <path d="M 0 6 L 8 6 M 4 0 L 4 3 M 8 3 L 8 6 M 0 3 L 8 3" fill="none" stroke="#000000" strokeWidth="0.55" opacity="0.6" />
+            <path d="M 0 5 L 8 5" fill="none" stroke="#ffffff" strokeWidth="0.3" opacity="0.25" />
+          </pattern>
+
+          <pattern id="plankOverlay" width="10" height="5" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="5" x2="10" y2="5" stroke="#000000" strokeWidth="0.6" opacity="0.65" />
+            <line x1="0" y1="4.5" x2="10" y2="4.5" stroke="#ffffff" strokeWidth="0.3" opacity="0.2" />
+          </pattern>
+
+          <pattern id="shingleOverlay" width="8" height="5" patternUnits="userSpaceOnUse">
+            <path d="M 0 5 Q 4 8, 8 5" fill="none" stroke="#000000" strokeWidth="0.65" opacity="0.7" />
+            <path d="M 0 4.2 Q 4 7.2, 8 4.2" fill="none" stroke="#ffffff" strokeWidth="0.35" opacity="0.2" />
+          </pattern>
+
+          <pattern id="soilOverlay" width="6" height="6" patternUnits="userSpaceOnUse">
+            <circle cx="1.5" cy="1.5" r="0.6" fill="#facc15" opacity="0.2" />
+            <circle cx="4.5" cy="3.5" r="0.5" fill="#ca8a04" opacity="0.3" />
+            <circle cx="3" cy="5" r="0.7" fill="#000000" opacity="0.4" />
+          </pattern>
+
+          <pattern id="techGridOverlay" width="6" height="6" patternUnits="userSpaceOnUse">
+            <rect width="6" height="6" fill="none" stroke="#ca8a04" strokeWidth="0.4" opacity="0.3" />
+            <line x1="0" y1="0" x2="6" y2="6" stroke="#facc15" strokeWidth="0.2" opacity="0.15" />
+          </pattern>
         </defs>
 
         {/* Ambient Occlusion Ground shadows */}
@@ -340,14 +367,16 @@ export default function RetroBusiness({
 
             {/* Cozy cottage log framing */}
             <rect x="16" y="44" width="68" height="40" fill="url(#cottageThemeGrad)" stroke="#ca8a04" strokeWidth="1" />
+            <rect x="16" y="44" width="68" height="40" fill="url(#plankOverlay)" opacity="0.3" />
             
             {/* Log ridges */}
             {Array.from({ length: 5 }).map((_, i) => (
-              <line key={i} x1="16" y1={44 + i * 8} x2="84" y2={44 + i * 8} stroke="#09090b" strokeWidth="1" opacity="0.4" />
+              <line key={i} x1="16" y1={44 + i * 8} x2="84" y2={44 + i * 8} stroke="#09090b" strokeWidth="1" opacity="0.3" />
             ))}
 
             {/* Symmetrical High-pitch brick fireplace chimney */}
             <rect x="22" y="18" width="10" height="26" fill="#7f1d1d" stroke="#000" strokeWidth="1" />
+            <rect x="22" y="18" width="10" height="26" fill="url(#brickOverlay)" opacity="0.4" />
             <rect x="20" y="16" width="14" height="3.5" fill="#450a0a" />
             {/* Smoke effects */}
             <circle cx="27" cy="10" r="3.5" fill="#a1a1aa" opacity="0.5" className="animate-pulse" />
@@ -355,7 +384,8 @@ export default function RetroBusiness({
 
             {/* High-fidelity custom angled triangular Roof */}
             <polygon points="10,44 50,15 90,44" fill="#78350f" stroke="url(#luxuryGoldGrad)" strokeWidth="1.8" />
-            <polygon points="12,42 50,18 88,42" fill="#451a03" />
+            <polygon points="10,44 50,15 90,44" fill="url(#shingleOverlay)" opacity="0.5" />
+            <polygon points="12,42 50,18 88,42" fill="#451a03" opacity="0.6" />
 
             {/* Polished vintage glass door */}
             <rect x="42" y="56" width="16" height="28" fill="#18181b" stroke="#eab308" strokeWidth="1" />
@@ -378,6 +408,7 @@ export default function RetroBusiness({
           <g>
             {/* Rich black soil background bed with golden border */}
             <rect x="10" y="40" width="80" height="46" fill="#1e130c" rx="6" stroke="#fbbf24" strokeWidth="1.5" />
+            <rect x="10" y="40" width="80" height="46" fill="url(#soilOverlay)" rx="6" opacity="0.5" />
             
             {/* Picket fence at the back / sides */}
             {Array.from({ length: 9 }).map((_, i) => (
@@ -479,6 +510,7 @@ export default function RetroBusiness({
 
             {/* Solid Brickwork main body */}
             <rect x="16" y="44" width="68" height="42" fill={`url(#${businessId}ThemeGrad)`} rx="4" stroke="#ca8a04" strokeWidth="1.2" />
+            <rect x="16" y="44" width="68" height="42" fill="url(#brickOverlay)" rx="4" opacity="0.3" />
             
             {/* Sign board base */}
             <rect x="20" y="32" width="60" height="13" fill="#09090b" rx="2" stroke="url(#luxuryGoldGrad)" strokeWidth="1.5" />
@@ -504,6 +536,7 @@ export default function RetroBusiness({
 
             {/* Upgraded corporate facade */}
             <rect x="15" y="38" width="70" height="48" fill={`url(#${businessId}ThemeGrad)`} rx="5" stroke="url(#luxuryGoldGrad)" strokeWidth="1.6" />
+            <rect x="15" y="38" width="70" height="48" fill="url(#brickOverlay)" rx="5" opacity="0.3" />
             <rect x="15" y="38" width="70" height="3" fill="#ffffff" opacity="0.15" />
 
             {/* Highly detailed double glass doors */}
@@ -540,6 +573,7 @@ export default function RetroBusiness({
 
             {/* Floor 1 */}
             <rect x="12" y="50" width="76" height="36" fill="#0c0a09" stroke="#ca8a04" strokeWidth="1" />
+            <rect x="12" y="50" width="76" height="36" fill="url(#brickOverlay)" opacity="0.35" />
             
             {/* Decorative structural divider */}
             <rect x="8" y="44" width="84" height="6" fill="url(#luxuryGoldGrad)" rx="1.5" />
@@ -547,6 +581,7 @@ export default function RetroBusiness({
 
             {/* Floor 2 Penthouse Structure */}
             <rect x="15" y="16" width="70" height="28" fill={`url(#${businessId}ThemeGrad)`} stroke="#ca8a04" strokeWidth="1.5" />
+            <rect x="15" y="16" width="70" height="28" fill="url(#brickOverlay)" opacity="0.3" />
 
             {/* Floor 2 Arched luxury panels */}
             <rect x="24" y="22" width="12" height="16" rx="4" fill="url(#glassReflection)" />
@@ -598,6 +633,7 @@ export default function RetroBusiness({
             {/* Obsidian grand block structure with pillars */}
             <rect x="12" y="16" width="76" height="70" fill="#09090c" rx="3" stroke="#eab308" strokeWidth="1.5" />
             <rect x="16" y="24" width="68" height="62" fill={`url(#${businessId}ThemeGrad)`} />
+            <rect x="16" y="24" width="68" height="62" fill="url(#brickOverlay)" opacity="0.25" />
 
             {/* Premium 3D Marble pillars (White-gold) */}
             <rect x="14" y="24" width="7" height="62" fill="url(#stoneColumnGrad)" rx="1.5" />
@@ -634,6 +670,7 @@ export default function RetroBusiness({
 
             {/* Royal Obsidian Glass Skyscraper Block with Gold Lining */}
             <rect x="14" y="12" width="72" height="76" fill="#09090b" rx="6" stroke="url(#luxuryGoldGrad)" strokeWidth="2.2" />
+            <rect x="14" y="12" width="72" height="76" fill="url(#techGridOverlay)" opacity="0.4" rx="6" />
 
             {/* Glowing neon high-tech glass towers */}
             <rect x="19" y="18" width="23" height="64" fill="url(#glassReflection)" rx="3" />
@@ -666,3 +703,4 @@ export default function RetroBusiness({
     </div>
   );
 }
+
