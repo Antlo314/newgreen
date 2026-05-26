@@ -688,6 +688,61 @@ export default function RetroBusiness({
             <rect x="46" y="12" width="8" height="76" fill="#020617" opacity="0.7" />
             <rect x="47" y="40" width="6" height="14" fill="url(#scaffoldGrad)" rx="1.5" className="animate-pulse" />
 
+            {/* Level 5 Animated Mechanical Upgrades: Spinning Gears & Active Smoke Chimneys */}
+            {/* Left Gear */}
+            <g className="origin-[25px_30px] animate-[spin_6s_linear_infinite]">
+              <circle cx="25" cy="30" r="5" fill="#facc15" stroke="#ca8a04" strokeWidth="1" />
+              {Array.from({ length: 8 }).map((_, i) => (
+                <rect
+                  key={`gear-l-${i}`}
+                  x="24"
+                  y="22"
+                  width="2"
+                  height="16"
+                  rx="0.5"
+                  fill="#ca8a04"
+                  transform={`rotate(${i * 45} 25 30)`}
+                />
+              ))}
+              <circle cx="25" cy="30" r="2" fill="#09090b" />
+            </g>
+
+            {/* Right Gear (rotates opposite direction) */}
+            <g className="origin-[75px_30px] animate-[spin_8s_linear_infinite_reverse]">
+              <circle cx="75" cy="30" r="6" fill="#facc15" stroke="#ca8a04" strokeWidth="1" />
+              {Array.from({ length: 8 }).map((_, i) => (
+                <rect
+                  key={`gear-r-${i}`}
+                  x="74"
+                  y="21"
+                  width="2"
+                  height="18"
+                  rx="0.5"
+                  fill="#ca8a04"
+                  transform={`rotate(${i * 45} 75 30)`}
+                />
+              ))}
+              <circle cx="75" cy="30" r="2.5" fill="#09090b" />
+            </g>
+
+            {/* Active Chimneys with Smoke Particles */}
+            <g>
+              {/* Chimney Left */}
+              <rect x="20" y="5" width="4" height="7" fill="#374151" stroke="#1f2937" strokeWidth="0.8" />
+              <rect x="19" y="4" width="6" height="1.5" fill="#ca8a04" />
+              {/* Animated Smoke particles */}
+              <circle cx="22" cy="-1" r="2" fill="#e4e4e7" opacity="0.4" className="animate-ping origin-[22px_-1px]" />
+              <circle cx="20" cy="-4" r="3.5" fill="#a1a1aa" opacity="0.25" className="animate-pulse" />
+            </g>
+            <g>
+              {/* Chimney Right */}
+              <rect x="76" y="5" width="4" height="7" fill="#374151" stroke="#1f2937" strokeWidth="0.8" />
+              <rect x="75" y="4" width="6" height="1.5" fill="#ca8a04" />
+              {/* Animated Smoke particles */}
+              <circle cx="78" cy="-1" r="2" fill="#e4e4e7" opacity="0.4" className="animate-ping origin-[78px_-1px]" />
+              <circle cx="80" cy="-4" r="3.5" fill="#a1a1aa" opacity="0.25" className="animate-pulse" />
+            </g>
+
             {/* Giant Illuminated Neon Board Sign */}
             <rect x="8" y="1" width="84" height="10" fill="url(#luxuryGoldGrad)" rx="2" stroke="#ffffff" strokeWidth="1" />
             <text x="50" y="8.5" fill="#ffffff" fontSize="6.5" fontWeight="905" fontFamily="monospace" textAnchor="middle" letterSpacing="0.8">

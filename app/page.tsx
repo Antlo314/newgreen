@@ -1319,6 +1319,34 @@ export default function HomeView() {
         return null;
       });
 
+      // --- DYNAMIC WEATHER HAZARDS: LIGHTNING STRIKES ---
+      if (weather === 'rainy' && Math.random() < 0.08) {
+        const lx = Math.floor(Math.random() * MAP_SIZE);
+        const ly = Math.floor(Math.random() * MAP_SIZE);
+        setMapGrid(prevGrid => {
+          if (!prevGrid || !prevGrid[ly]?.[lx]) return prevGrid;
+          const targetTile = prevGrid[ly][lx];
+          // Strike grass tiles, making them "quarry_stone" (obsidian deposit / smoldering ash)
+          if (targetTile.type === 'grass') {
+            const nextGrid = prevGrid.map((row, y) => row.map((tile, x) => {
+              if (x === lx && y === ly) {
+                return {
+                  ...tile,
+                  type: 'quarry_stone' as const,
+                  cooldownRemaining: 0,
+                  isRubble: false
+                };
+              }
+              return tile;
+            }));
+            addLog(`⚡ LIGHTNING STRIKE! Lightning hits coordinates [${lx}, ${ly}], leaving behind a rare Obsidian / Smoldering Ash deposit!`);
+            playRetroTone('strike', 1.8);
+            return nextGrid;
+          }
+          return prevGrid;
+        });
+      }
+
       // Passive stamina restore from AME Church stages
       const churchLvl = landmarkStages.ame_church || 0;
       if (churchLvl > 0) {
@@ -1966,6 +1994,13 @@ export default function HomeView() {
         staminaCost = 5;
       } else if (weather === 'sunset_glow') {
         staminaCost = 3;
+      } else if (weather === 'foggy') {
+        staminaCost = 6; // Deep fog requires high effort
+      }
+      
+      // Heavy windstorm event doubles stamina cost
+      if (activeEvent && activeEvent.type === 'storm') {
+        staminaCost *= 2;
       }
 
       setStamina(prev => {
@@ -2679,6 +2714,10 @@ export default function HomeView() {
   const landmarkIsRestored = activeLandmarkDetail ? restoredLandmarks.includes(activeLandmarkDetail.id) : false;
   const landmarkCanRestore = activeLandmarkDetail ? (wood >= 25 && stone >= 25 && clay >= 25 && bswx >= 250) : false;
 
+  // --- HISTORIC RESTORATION MINIGAME SLIDER STATE ---
+  const [showRestorationPuzzle, setShowRestorationPuzzle] = useState(false);
+  const [puzzleOffsets, setPuzzleOffsets] = useState<number[]>([0, 0, 0]); // offset rotation indexes (0-3)
+
   const handleRestoreLandmark = () => {
     if (!activeLandmarkDetail) return;
     if (landmarkIsRestored) return;
@@ -2687,16 +2726,34 @@ export default function HomeView() {
       playRetroTone('fail');
       return;
     }
-    setWood(w => w - 25);
-    setStone(s => s - 25);
-    setClay(c => c - 25);
-    setBswx(b => b - 250);
-    setRestoredLandmarks(r => [...r, activeLandmarkDetail.id]);
-    setReputation(rep => rep + 300);
-    setLegacyPoints(lp => lp + 50);
-    addLog(`✨ HISTORIC PRESERVATION: You successfully funded the restoration of ${activeLandmarkDetail.name}! Its sacred legacy is permanently preserved. (+300 Rep and +50 Legacy Points!)`);
-    playRetroTone('level', 2.0);
-    setActiveLandmarkDetail(null);
+    // Set up a randomized slide offset puzzle (e.g. [1, 2, 3])
+    setPuzzleOffsets([
+      Math.floor(Math.random() * 3) + 1,
+      Math.floor(Math.random() * 3) + 1,
+      Math.floor(Math.random() * 3) + 1
+    ]);
+    setShowRestorationPuzzle(true);
+  };
+
+  const verifyPuzzleRestoration = () => {
+    // Correct if all offsets are 0 (aligned)
+    const isCorrect = puzzleOffsets.every(offset => offset === 0);
+    if (isCorrect) {
+      setWood(w => w - 25);
+      setStone(s => s - 25);
+      setClay(c => c - 25);
+      setBswx(b => b - 250);
+      setRestoredLandmarks(r => [...r, activeLandmarkDetail!.id]);
+      setReputation(rep => rep + 300);
+      setLegacyPoints(lp => lp + 50);
+      addLog(`✨ HISTORIC PRESERVATION: You successfully aligned the blueprints and restored ${activeLandmarkDetail!.name}! (+300 Rep and +50 Legacy Points!)`);
+      playRetroTone('level', 2.0);
+      setShowRestorationPuzzle(false);
+      setActiveLandmarkDetail(null);
+    } else {
+      addLog("Blueprint alignment incorrect! Rotate the tiles until the layout meshes perfectly.");
+      playRetroTone('fail');
+    }
   };
 
   return (
@@ -2953,6 +3010,40 @@ export default function HomeView() {
           <span>HERITAGE BOOST ACTIVE (+25% REVENUE YIELDS): {heritageCatalystTime}s REMAINING</span>
         </div>
       )}
+
+      {/* DYNAMIC MARKET NEWS TICKER */}
+      <div className="bg-zinc-900 border-b border-yellow-500/20 py-1.5 overflow-hidden relative flex items-center">
+        <div className="absolute left-0 top-0 bottom-0 bg-yellow-500/90 text-black px-3 font-mono font-black text-[9px] flex items-center z-10 border-r border-yellow-500 shadow-[2px_0_5px_rgba(0,0,0,0.5)]">
+          NEWS TICKER
+        </div>
+        <div className="flex-1 whitespace-nowrap overflow-hidden relative h-4 font-mono text-[9.5px]">
+          <div className="inline-block animate-[marquee_25s_linear_infinite] pl-[100%] text-yellow-405/85 tracking-wider">
+            {activeEvent ? (
+              <span className="font-extrabold text-white bg-red-950/70 border border-red-500/30 px-2 py-0.5 rounded mr-8">
+                🚨 SPECIAL EVENT: {activeEvent.title.toUpperCase()} — {activeEvent.desc}
+              </span>
+            ) : null}
+            <span className="mr-8">
+              🌤 CURRENT WEATHER: {weather.toUpperCase()} ({weather === 'sunny' ? "Market trade is fully active (+1 Resource yields)" : weather === 'rainy' ? "Stamina cost is slightly increased" : weather === 'foggy' ? "Discovery probability elevated" : "Special discount rates apply"})
+            </span>
+            <span className="mr-8">
+              📈 MARKET SHIFT: Stradford Brick Yards reporting {weather === 'rainy' ? "abundant brick production (-20% cost)" : "regular supplies"}.
+            </span>
+            <span className="mr-8">
+              🌲 WOOD MARKET: Cedar lumber exports from AME Church domain trading steady at 1.2x.
+            </span>
+            <span className="mr-8">
+              💎 CO-OP LEDGER: Join other Greenwood members to secure collective asset ownership.
+            </span>
+          </div>
+        </div>
+        <style jsx global>{`
+          @keyframes marquee {
+            0% { transform: translate3d(0, 0, 0); }
+            100% { transform: translate3d(-100%, 0, 0); }
+          }
+        `}</style>
+      </div>
 
       {/* 2. SPLASH SCREEN PAGE */}
       {screen === 'splash' && (
@@ -5015,6 +5106,65 @@ export default function HomeView() {
                         This sacred site is fully restored. Rebuilt with premium materials, local labor, and cooperative community funds to honor the legacy of Tulsa’s Black Wall Street pioneers.
                       </p>
                     </div>
+                  ) : showRestorationPuzzle ? (
+                    <div className="bg-zinc-950 border-2 border-yellow-500/60 p-4 rounded-xl space-y-3 font-mono">
+                      <span className="text-[10px] text-yellow-405 font-bold block uppercase tracking-widest animate-pulse">🏛️ BLUEPRINT RECONSTRUCTION SLIDER</span>
+                      <p className="text-[9px] text-gray-400 leading-normal">
+                        Rotate the segmented blueprint layers. Align them properly (all offset shifts to 0) to complete the historic preservation structure!
+                      </p>
+                      
+                      <div className="space-y-2 py-1 bg-black/60 rounded border border-white/5 p-2 overflow-hidden flex flex-col items-center">
+                        {/* 3 stacked horizontal blueprint blocks */}
+                        {[0, 1, 2].map((idx) => {
+                          const offsetVal = puzzleOffsets[idx];
+                          // Calculate horizontal shifting margin/padding for visual offset
+                          const shiftPercent = offsetVal * 20 - 20; // -20%, 0%, 20% visual shift
+                          return (
+                            <div 
+                              key={idx}
+                              onClick={() => {
+                                setPuzzleOffsets(prev => {
+                                  const copy = [...prev];
+                                  copy[idx] = (copy[idx] + 1) % 3; // 0, 1, 2 options
+                                  playRetroTone('strike', 0.8);
+                                  return copy;
+                                });
+                              }}
+                              className="w-full h-8 bg-blue-950/80 border border-blue-400/50 rounded flex items-center justify-center relative cursor-pointer hover:bg-blue-900/60 transition-all select-none group overflow-hidden"
+                            >
+                              <div 
+                                className="absolute inset-0 bg-blue-500/10 flex items-center justify-center font-black text-[9px] tracking-widest text-blue-300 transition-all duration-200"
+                                style={{ transform: `translateX(${shiftPercent}%)` }}
+                              >
+                                <span>[ LAYER-{idx + 1} BLUEPRINT {offsetVal === 0 ? "★ ALIGNED ★" : `[SHIFTED: +${offsetVal * 120}px]`} ]</span>
+                              </div>
+                              {/* Selection overlay indicator */}
+                              <div className="absolute right-2 text-[8px] text-blue-400 group-hover:text-white">
+                                ↻ ROTATE
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex gap-2 text-[10px]">
+                        <button
+                          onClick={() => {
+                            setShowRestorationPuzzle(false);
+                            playRetroTone('fail', 0.6);
+                          }}
+                          className="flex-1 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-gray-400 rounded uppercase border border-white/5 transition-all cursor-pointer font-bold"
+                        >
+                          ABORT
+                        </button>
+                        <button
+                          onClick={verifyPuzzleRestoration}
+                          className="flex-1 py-1.5 bg-yellow-500 hover:bg-yellow-405 text-black rounded uppercase font-black transition-all cursor-pointer"
+                        >
+                          VERIFY BLUEPRINTS
+                        </button>
+                      </div>
+                    </div>
                   ) : (
                     <div className="bg-zinc-900 border border-yellow-500/20 p-3 rounded-lg space-y-2">
                       <span className="text-[10px] text-yellow-400 font-mono font-bold block uppercase">🛠 Landmark Renaissance Initiative</span>
@@ -5055,7 +5205,10 @@ export default function HomeView() {
 
                   <div className="text-center pt-1">
                     <button
-                      onClick={() => setActiveLandmarkDetail(null)}
+                      onClick={() => {
+                        setActiveLandmarkDetail(null);
+                        setShowRestorationPuzzle(false);
+                      }}
                       className="w-full py-1.5 bg-zinc-800 hover:bg-zinc-750 text-gray-300 font-mono text-xs uppercase rounded active:scale-95 transition-all cursor-pointer"
                     >
                       Done Viewing Plaque
