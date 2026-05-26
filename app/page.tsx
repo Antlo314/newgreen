@@ -708,6 +708,33 @@ export default function HomeView() {
     setBurstParticles(prev => [...prev, ...arr]);
   };
 
+  const spawnFootstepDust = (tx: number, ty: number) => {
+    const tile = mapGrid[ty]?.[tx];
+    let dustColor = '#71717a'; // default grey
+    if (tile) {
+      if (tile.type === 'clay_deposit' || tile.type === 'road_brick') {
+        dustColor = tile.isDirt ? '#78350f' : '#b45309'; // brown/terracotta dust
+      } else if (tile.type === 'grass' || tile.type === 'forest_tree') {
+        dustColor = '#3f6212'; // greenwood grass dust
+      }
+    }
+
+    const list: Particle[] = [];
+    for (let i = 0; i < 3; i++) {
+      list.push({
+        id: Math.random() + i,
+        x: tx * 24 + 12 + (Math.random() - 0.5) * 8,
+        y: ty * 24 + 22,
+        vx: (Math.random() - 0.5) * 1.5,
+        vy: -0.2 - Math.random() * 0.8,
+        color: dustColor,
+        size: Math.random() * 3 + 2,
+        opacity: 0.6
+      });
+    }
+    setBurstParticles(prev => [...prev, ...list]);
+  };
+
   const triggerLandmarkInspection = (landmarkId: string) => {
     const site = HISTORIC_SITES.find(s => s.id === landmarkId);
     if (!site) return;
@@ -1554,13 +1581,16 @@ export default function HomeView() {
                   const nextTile = mapGrid[updated.y]?.[updated.x + stepDx];
                   if (nextTile && nextTile.type === 'grass') {
                     updated.x += stepDx;
+                    spawnFootstepDust(updated.x, updated.y);
                   } else if (stepDy !== 0) {
                     updated.y += stepDy;
+                    spawnFootstepDust(updated.x, updated.y);
                   }
                 } else if (stepDy !== 0) {
                   const nextTile = mapGrid[updated.y + stepDy]?.[updated.x];
                   if (nextTile && nextTile.type === 'grass') {
                     updated.y += stepDy;
+                    spawnFootstepDust(updated.x, updated.y);
                   }
                 }
               }
@@ -1748,6 +1778,7 @@ export default function HomeView() {
     setSelectedX(nextX);
     setSelectedY(nextY);
     playRetroTone('strike', 0.25);
+    spawnFootstepDust(nextX, nextY);
 
     // COORDINATES GEOGRAPHICAL EXPLORATION REWARDS (INTRICATE LP PATHWAY) & FOG EXPLORATION BONUS
     const coordStr = `${nextX},${nextY}`;
@@ -1882,16 +1913,25 @@ export default function HomeView() {
 
     // Dynamic Physics Star Sparkles
     const list: Particle[] = [];
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 12; i++) {
       const seedVal = (currentSystemTime * 7919 + tile.x * 13 + tile.y * 7 + i * 37) % 100;
+      // Define color variations based on type
+      let color = '#22c55e'; // default green wood
+      if (type === 'tree') {
+        color = i % 2 === 0 ? '#22c55e' : '#15803d'; // green/dark green wood splinters
+      } else if (type === 'stone') {
+        color = i % 2 === 0 ? '#facc15' : '#f97316'; // yellow/orange stone sparks
+      } else if (type === 'clay') {
+        color = i % 2 === 0 ? '#bc6c25' : '#dda15e'; // terracotta/sandy clay splatters
+      }
       list.push({
         id: currentSystemTime * 100 + i,
         x: tile.x * 24 + 12,
         y: tile.y * 24 + 12,
-        vx: (seedVal % 9) - 4.5,
-        vy: -((seedVal % 7) + 2),
-        color: type === 'tree' ? '#22c55e' : (type === 'stone' ? '#facc15' : '#bc6c25'),
-        size: (seedVal % 5) + 3,
+        vx: (seedVal % 11) - 5.5,
+        vy: -((seedVal % 8) + 4), // higher upward launch velocity for dramatic arc
+        color,
+        size: (seedVal % 4) + 3,
         opacity: 1
       });
     }
@@ -2706,8 +2746,10 @@ export default function HomeView() {
             onClick={() => setActiveResourceTooltip(activeResourceTooltip === 'time' ? null : 'time')}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className={`flex items-center gap-1 bg-zinc-900 border border-zinc-800 px-2 py-1 rounded text-white font-mono font-bold shadow-inner cursor-help transition-all ${
-              activeResourceTooltip === 'time' ? 'ring-1 ring-yellow-400 border-yellow-500' : ''
+            className={`flex items-center gap-1 bg-zinc-900 border px-2 py-1 rounded text-white font-mono font-bold shadow-inner cursor-help transition-all duration-300 ${
+              activeResourceTooltip === 'time' 
+                ? 'border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.6)]' 
+                : 'border-yellow-500/35 shadow-[0_0_8px_rgba(250,204,21,0.15)]'
             }`}
             title="Click to learn about Time & Cycles"
           >
@@ -2724,12 +2766,14 @@ export default function HomeView() {
             whileTap={{ scale: 0.95 }}
             animate={{
               scale: bswxPulseType === 'up' ? [1, 1.15, 1.05, 1] : bswxPulseType === 'down' ? [1, 0.88, 0.95, 1] : 1,
-              borderColor: bswxPulseType === 'up' ? 'rgba(234, 179, 8, 0.9)' : bswxPulseType === 'down' ? 'rgba(239, 68, 68, 0.9)' : (activeResourceTooltip === 'bswx' ? 'rgba(234, 179, 8, 1)' : 'rgba(234, 179, 8, 0.2)'),
-              backgroundColor: bswxPulseType === 'up' ? 'rgba(234, 179, 8, 0.35)' : bswxPulseType === 'down' ? 'rgba(239, 68, 68, 0.25)' : (activeResourceTooltip === 'bswx' ? 'rgba(66, 32, 6, 0.4)' : 'rgba(66, 32, 6, 0.2)'),
+              borderColor: bswxPulseType === 'up' ? 'rgba(234, 179, 8, 0.9)' : bswxPulseType === 'down' ? 'rgba(239, 68, 68, 0.9)' : (activeResourceTooltip === 'bswx' ? 'rgba(234, 179, 8, 1)' : 'rgba(234, 179, 8, 0.25)'),
+              backgroundColor: bswxPulseType === 'up' ? 'rgba(234, 179, 8, 0.35)' : bswxPulseType === 'down' ? 'rgba(239, 68, 68, 0.25)' : (activeResourceTooltip === 'bswx' ? 'rgba(66, 32, 6, 0.4)' : 'rgba(66, 32, 6, 0.15)'),
             }}
             transition={{ type: "spring", stiffness: 300, damping: 15 }}
-            className={`flex items-center gap-1 px-2 py-1 rounded cursor-help border transition-colors ${
-              activeResourceTooltip === 'bswx' ? 'ring-1 ring-yellow-400' : ''
+            className={`flex items-center gap-1 px-2 py-1 rounded cursor-help border transition-all duration-300 ${
+              activeResourceTooltip === 'bswx' 
+                ? 'shadow-[0_0_15px_rgba(234,179,8,0.6)]' 
+                : 'shadow-[0_0_8px_rgba(234,179,8,0.15)]'
             }`}
             title="Click to learn about Town Coins"
           >
@@ -2750,12 +2794,14 @@ export default function HomeView() {
             whileTap={{ scale: 0.95 }}
             animate={{
               scale: repPulseType === 'up' ? [1, 1.15, 1.05, 1] : repPulseType === 'down' ? [1, 0.88, 0.95, 1] : 1,
-              borderColor: repPulseType === 'up' ? 'rgba(52, 211, 153, 0.9)' : repPulseType === 'down' ? 'rgba(239, 68, 68, 0.9)' : (activeResourceTooltip === 'rep' ? 'rgba(16, 185, 129, 1)' : 'rgba(234, 179, 8, 0.2)'),
-              backgroundColor: repPulseType === 'up' ? 'rgba(52, 211, 153, 0.35)' : repPulseType === 'down' ? 'rgba(239, 68, 68, 0.25)' : (activeResourceTooltip === 'rep' ? 'rgba(6, 78, 59, 0.4)' : 'rgba(66, 32, 6, 0.2)'),
+              borderColor: repPulseType === 'up' ? 'rgba(52, 211, 153, 0.9)' : repPulseType === 'down' ? 'rgba(239, 68, 68, 0.9)' : (activeResourceTooltip === 'rep' ? 'rgba(16, 185, 129, 1)' : 'rgba(16, 185, 129, 0.25)'),
+              backgroundColor: repPulseType === 'up' ? 'rgba(52, 211, 153, 0.35)' : repPulseType === 'down' ? 'rgba(239, 68, 68, 0.25)' : (activeResourceTooltip === 'rep' ? 'rgba(6, 78, 59, 0.4)' : 'rgba(6, 78, 59, 0.15)'),
             }}
             transition={{ type: "spring", stiffness: 300, damping: 15 }}
-            className={`flex items-center gap-1 px-2 py-1 rounded cursor-help border transition-colors ${
-              activeResourceTooltip === 'rep' ? 'ring-1 ring-emerald-400' : ''
+            className={`flex items-center gap-1 px-2 py-1 rounded cursor-help border transition-all duration-300 ${
+              activeResourceTooltip === 'rep' 
+                ? 'shadow-[0_0_15px_rgba(52,211,153,0.6)]' 
+                : 'shadow-[0_0_8px_rgba(52,211,153,0.15)]'
             }`}
             title="Click to learn about Reputation"
           >
@@ -2776,12 +2822,14 @@ export default function HomeView() {
             whileTap={{ scale: 0.95 }}
             animate={{
               scale: lpPulseType === 'up' ? [1, 1.15, 1.05, 1] : lpPulseType === 'down' ? [1, 0.88, 0.95, 1] : 1,
-              borderColor: lpPulseType === 'up' ? 'rgba(250, 204, 21, 0.9)' : lpPulseType === 'down' ? 'rgba(239, 68, 68, 0.9)' : (activeResourceTooltip === 'lp' ? 'rgba(234, 179, 8, 1)' : 'rgba(234, 179, 8, 0.2)'),
-              backgroundColor: lpPulseType === 'up' ? 'rgba(250, 204, 21, 0.35)' : lpPulseType === 'down' ? 'rgba(239, 68, 68, 0.25)' : (activeResourceTooltip === 'lp' ? 'rgba(66, 32, 6, 0.4)' : 'rgba(66, 32, 6, 0.2)'),
+              borderColor: lpPulseType === 'up' ? 'rgba(250, 204, 21, 0.9)' : lpPulseType === 'down' ? 'rgba(239, 68, 68, 0.9)' : (activeResourceTooltip === 'lp' ? 'rgba(234, 179, 8, 1)' : 'rgba(250, 204, 21, 0.25)'),
+              backgroundColor: lpPulseType === 'up' ? 'rgba(250, 204, 21, 0.35)' : lpPulseType === 'down' ? 'rgba(239, 68, 68, 0.25)' : (activeResourceTooltip === 'lp' ? 'rgba(66, 32, 6, 0.4)' : 'rgba(66, 32, 6, 0.15)'),
             }}
             transition={{ type: "spring", stiffness: 300, damping: 15 }}
-            className={`flex items-center gap-1 px-2 py-1 rounded cursor-help border transition-colors ${
-              activeResourceTooltip === 'lp' ? 'ring-1 ring-yellow-400' : ''
+            className={`flex items-center gap-1 px-2 py-1 rounded cursor-help border transition-all duration-300 ${
+              activeResourceTooltip === 'lp' 
+                ? 'shadow-[0_0_15px_rgba(250,204,21,0.6)]' 
+                : 'shadow-[0_0_8px_rgba(250,204,21,0.15)]'
             }`}
             title="Click to learn about Legacy Points"
           >
@@ -2802,12 +2850,14 @@ export default function HomeView() {
             whileTap={{ scale: 0.95 }}
             animate={{
               scale: staminaPulseType === 'up' ? [1, 1.15, 1.05, 1] : staminaPulseType === 'down' ? [1, 0.88, 0.95, 1] : 1,
-              borderColor: staminaPulseType === 'up' ? 'rgba(163, 230, 53, 0.9)' : staminaPulseType === 'down' ? 'rgba(239, 68, 68, 0.9)' : (activeResourceTooltip === 'stamina' ? 'rgba(132, 204, 22, 1)' : 'rgba(234, 179, 8, 0.2)'),
-              backgroundColor: staminaPulseType === 'up' ? 'rgba(163, 230, 53, 0.35)' : staminaPulseType === 'down' ? 'rgba(239, 68, 68, 0.25)' : (activeResourceTooltip === 'stamina' ? 'rgba(63, 98, 18, 0.4)' : 'rgba(66, 32, 6, 0.2)'),
+              borderColor: staminaPulseType === 'up' ? 'rgba(163, 230, 53, 0.9)' : staminaPulseType === 'down' ? 'rgba(239, 68, 68, 0.9)' : (activeResourceTooltip === 'stamina' ? 'rgba(132, 204, 22, 1)' : 'rgba(163, 230, 53, 0.25)'),
+              backgroundColor: staminaPulseType === 'up' ? 'rgba(163, 230, 53, 0.35)' : staminaPulseType === 'down' ? 'rgba(239, 68, 68, 0.25)' : (activeResourceTooltip === 'stamina' ? 'rgba(63, 98, 18, 0.4)' : 'rgba(63, 98, 18, 0.15)'),
             }}
             transition={{ type: "spring", stiffness: 300, damping: 15 }}
-            className={`flex items-center gap-1 px-2 py-1 rounded cursor-help border transition-colors mr-1 ${
-              activeResourceTooltip === 'stamina' ? 'ring-1 ring-lime-400' : ''
+            className={`flex items-center gap-1 px-2 py-1 rounded cursor-help border transition-all duration-300 mr-1 ${
+              activeResourceTooltip === 'stamina' 
+                ? 'shadow-[0_0_15px_rgba(163,230,53,0.6)]' 
+                : 'shadow-[0_0_8px_rgba(163,230,53,0.15)]'
             }`}
             title="Click to learn about Stamina"
           >
@@ -3399,15 +3449,34 @@ export default function HomeView() {
                           {(() => {
                             const app = apprentices.find(a => a.x === tile.x && a.y === tile.y);
                             if (!app) return null;
+
+                            let statusEmote = '💤';
+                            if (app.state === 'walking') statusEmote = '🚶';
+                            else if (app.state === 'harvesting') {
+                              statusEmote = app.type === 'wood' ? '🪓' : app.type === 'stone' ? '⛏️' : '🏺';
+                            } else if (app.role === 'craftsman') {
+                              statusEmote = '⚒️';
+                            }
+
                             return (
-                              <RetroCharacter 
-                                isNPC={true} 
-                                npcType="apprentice" 
-                                skin={app.skin} 
-                                hair={app.hair} 
-                                clothing={app.clothing} 
-                                isMoving={app.state === 'walking'}
-                              />
+                              <div className="relative w-full h-full">
+                                <RetroCharacter 
+                                  isNPC={true} 
+                                  npcType="apprentice" 
+                                  skin={app.skin} 
+                                  hair={app.hair} 
+                                  clothing={app.clothing} 
+                                  isMoving={app.state === 'walking'}
+                                />
+                                {/* Floating Emote Bubble */}
+                                <motion.div 
+                                  className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-zinc-950/90 border border-yellow-500/30 text-[8px] px-1 py-0.5 rounded shadow-lg z-20 font-mono leading-none"
+                                  animate={{ y: [0, -3, 0] }}
+                                  transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+                                >
+                                  {statusEmote}
+                                </motion.div>
+                              </div>
                             );
                           })()}
                         </div>
