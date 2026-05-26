@@ -1,0 +1,6 @@
+{
+  "name": "New Greenwood (Black Wall Street Reborn)",
+  "description": "A high-fidelity, modernized 16-bit SNES-style top-down RPG and tycoon game commemorating Black Wall Street.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
