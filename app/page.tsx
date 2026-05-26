@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { 
   Hammer, Axe, Coins, Crown, Compass, TrendingUp, User, Plus, 
@@ -23,6 +23,7 @@ import CrtFrame from '../components/CrtFrame';
 import CraftingWorkshop from '../components/CraftingWorkshop';
 import TradingDesk from '../components/TradingDesk';
 import RestorationManager from '../components/RestorationManager';
+import { useAudioPlayer } from '../hooks/useAudioPlayer';
 
 // --- TYPEWRITER SCI-FI RETRO EFFECT MODULE ---
 const TypeWriterText: React.FC<{ text: string; speed?: number }> = ({ text, speed = 12 }) => {
@@ -208,6 +209,7 @@ interface DigitalApprentice {
   skin: string;
   hair: string;
   clothing: string;
+  role?: string;
 }
 
 interface Particle {
@@ -538,6 +540,7 @@ export default function HomeView() {
   const [mapGrid, setMapGrid] = useState<MapTile[][]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [masterVolume, setMasterVolume] = useState(0.5);
+  const [hasInteracted, setHasInteracted] = useState(false);
   const [isGamePaused, setIsGamePaused] = useState(false);
   const [pauseMenuTab, setPauseMenuTab] = useState<'academy' | 'inventory' | 'crafting' | 'exchange' | 'legacy' | 'favors'>('academy');
   const [civicFavors, setCivicFavors] = useState<CivicFavor[]>([]);
@@ -786,14 +789,7 @@ export default function HomeView() {
         osc.start();
         osc.stop(ctx.currentTime + 0.25);
       } else if (type === 'level') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(200, ctx.currentTime);
-        osc.frequency.setValueAtTime(400, ctx.currentTime + 0.15);
-        osc.frequency.setValueAtTime(600, ctx.currentTime + 0.3);
-        gain.gain.setValueAtTime(effectiveVol * 0.4, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.45);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.45);
+        playAchievementSfx();
       } else {
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(150, ctx.currentTime);
@@ -897,46 +893,30 @@ export default function HomeView() {
     };
   }, [chiptunePlaying, activeTrack, masterVolume, isMuted]);
 
-  // Ambient Looping Background Synthetic Lull
-  const startBackgroundSoundtrack = () => {
-    try {
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+  // Ambient Looping Background Music & Fades
+  let currentTrackUrl: string | null = null;
+  if (screen === 'splash' || screen === 'creator') {
+    currentTrackUrl = '/music/GreenWood Main Menu.m4a';
+  } else if (screen === 'game') {
+    if (activeNPC !== null || isLeaderboardOpen) {
+      currentTrackUrl = '/music/GreenWood Founding Members.m4a';
+    } else if (isGamePaused) {
+      if (pauseMenuTab === 'academy' || pauseMenuTab === 'legacy' || pauseMenuTab === 'favors') {
+        currentTrackUrl = '/music/GreenWood Trade Academy.m4a';
+      } else if (pauseMenuTab === 'exchange' || pauseMenuTab === 'inventory' || pauseMenuTab === 'crafting') {
+        currentTrackUrl = '/music/GreenWood Ledger & Market Hub.m4a';
+      } else {
+        currentTrackUrl = '/music/soundtrack.mp3';
       }
-      const ctx = audioCtxRef.current;
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-      
-      if (bgMusicOscRef.current || bgAudioRef.current) return; // Already running
-
-      const playSynthesizedFallback = () => {
-        // The user requested to take the humming noise away.
-        // We make this fallback silent (do nothing) to eliminate the continuous background hum.
-      };
-
-      // Create browser audio element with high reliability and immediate event bindings
-      const audio = new Audio();
-      audio.src = '/soundtrack.mp3';
-      audio.loop = true;
-      audio.volume = isMuted ? 0 : masterVolume * 0.4;
-
-      audio.addEventListener('canplaythrough', () => {
-        audio.play().catch(() => {
-          // If browser browser autoplay guard intercepts, fallback to synthesized drone node
-          playSynthesizedFallback();
-        });
-      });
-
-      audio.addEventListener('error', () => {
-        // soundtrack.mp3 has not been uploaded yet or failed, use synth fallback
-        playSynthesizedFallback();
-      });
-
-      bgAudioRef.current = audio;
-    } catch {
-      // Guarded
+    } else {
+      currentTrackUrl = '/music/soundtrack.mp3';
     }
+  }
+
+  const { playAchievementSfx } = useAudioPlayer(currentTrackUrl, masterVolume, isMuted, hasInteracted);
+
+  const startBackgroundSoundtrack = () => {
+    setHasInteracted(true);
   };
 
   useEffect(() => {
