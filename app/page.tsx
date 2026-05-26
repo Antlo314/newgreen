@@ -418,7 +418,7 @@ export default function HomeView() {
   const [screen, setScreen] = useState<'splash' | 'creator' | 'game'>('splash');
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0);
-  const [activeResourceTooltip, setActiveResourceTooltip] = useState<'bswx' | 'rep' | 'lp' | 'stamina' | 'weather' | 'heritage' | null>(null);
+  const [activeResourceTooltip, setActiveResourceTooltip] = useState<'bswx' | 'rep' | 'lp' | 'stamina' | 'weather' | 'heritage' | 'time' | null>(null);
   const [showFaintScreen, setShowFaintScreen] = useState(false);
 
   // --- CHIPTUNE SYNTH MUSIC BOX STATES ---
@@ -541,6 +541,7 @@ export default function HomeView() {
   const [isMuted, setIsMuted] = useState(false);
   const [masterVolume, setMasterVolume] = useState(0.5);
   const [hasInteracted, setHasInteracted] = useState(false);
+  const [timeOfDay, setTimeOfDay] = useState(480); // Start at 08:00 AM (480 minutes)
   const [isGamePaused, setIsGamePaused] = useState(false);
   const [pauseMenuTab, setPauseMenuTab] = useState<'academy' | 'inventory' | 'crafting' | 'exchange' | 'legacy' | 'favors'>('academy');
   const [civicFavors, setCivicFavors] = useState<CivicFavor[]>([]);
@@ -893,6 +894,28 @@ export default function HomeView() {
     };
   }, [chiptunePlaying, activeTrack, masterVolume, isMuted]);
 
+  // Format game time
+  const gameHour = Math.floor(timeOfDay / 60);
+  const gameMinute = Math.floor(timeOfDay % 60);
+  const gameAmpm = gameHour >= 12 ? 'PM' : 'AM';
+  const gameDisplayHour = gameHour % 12 === 0 ? 12 : gameHour % 12;
+  const gameDisplayMinute = gameMinute.toString().padStart(2, '0');
+  const gameFormattedTime = `${gameDisplayHour}:${gameDisplayMinute} ${gameAmpm}`;
+
+  // Time-based emoji and name
+  let timeIcon = '☀️';
+  let timePeriodName = 'Day';
+  if (timeOfDay >= 1260 || timeOfDay < 360) {
+    timeIcon = '🌙';
+    timePeriodName = 'Night';
+  } else if (timeOfDay >= 360 && timeOfDay < 480) {
+    timeIcon = '🌅';
+    timePeriodName = 'Dawn';
+  } else if (timeOfDay >= 1080 && timeOfDay < 1260) {
+    timeIcon = '🌇';
+    timePeriodName = 'Sunset';
+  }
+
   // Ambient Looping Background Music & Fades
   let currentTrackUrl: string | null = null;
   if (screen === 'splash' || screen === 'creator') {
@@ -1235,6 +1258,9 @@ export default function HomeView() {
     const clock = setInterval(() => {
       // Update system timestamp
       setCurrentSystemTime(Date.now());
+
+      // Increment game time of day (1 second = 10 minutes)
+      setTimeOfDay(t => (t + 10) % 1440);
 
       // Decrement/trigger random events
       setActiveEvent(currentEvent => {
@@ -2674,6 +2700,22 @@ export default function HomeView() {
         {/* Resources ledger ticker widgets */}
         <div id="persistent_subsystems_ledger" className="flex items-center gap-1.5 sm:gap-3 flex-wrap mt-2 sm:mt-0 text-[10px] sm:text-xs">
           
+          <motion.button
+            onMouseEnter={() => setActiveResourceTooltip('time')}
+            onMouseLeave={() => setActiveResourceTooltip(null)}
+            onClick={() => setActiveResourceTooltip(activeResourceTooltip === 'time' ? null : 'time')}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className={`flex items-center gap-1 bg-zinc-900 border border-zinc-800 px-2 py-1 rounded text-white font-mono font-bold shadow-inner cursor-help transition-all ${
+              activeResourceTooltip === 'time' ? 'ring-1 ring-yellow-400 border-yellow-500' : ''
+            }`}
+            title="Click to learn about Time & Cycles"
+          >
+            <span>{timeIcon}</span>
+            <span className="text-yellow-400">{gameFormattedTime}</span>
+            <span className="text-[7.5px] opacity-60 uppercase font-mono tracking-wider ml-0.5">{timePeriodName}</span>
+          </motion.button>
+
           <motion.button 
             onMouseEnter={() => setActiveResourceTooltip('bswx')}
             onMouseLeave={() => setActiveResourceTooltip(null)}
@@ -2808,6 +2850,7 @@ export default function HomeView() {
                   {activeResourceTooltip === 'rep' && "Community Reputation (REP)"}
                   {activeResourceTooltip === 'lp' && "Legacy Points (LP)"}
                   {activeResourceTooltip === 'stamina' && "Physical Stamina"}
+                  {activeResourceTooltip === 'time' && "Local Greenwood Clock"}
                   {activeResourceTooltip === 'weather' && "Active Dynamic Weather Rules"}
                   {activeResourceTooltip === 'heritage' && "Pioneer Heritage ID Profile & Perks"}
                 </strong>
@@ -2816,6 +2859,7 @@ export default function HomeView() {
                   {activeResourceTooltip === 'rep' && "Your respect level among New Greenwood neighbors. High reputation unlocks bigger buildings like Pioneer Cottages and increases passive income output. Build it by answering history trivia or completing elder quests!"}
                   {activeResourceTooltip === 'lp' && "Your historical wisdom points. Earned by exploring coordinates, saying hello to seniors, and learning from historical sites. Use Legacy Points to bake high-energy Potato Pies and healthy Ginger Tea inside your Bag."}
                   {activeResourceTooltip === 'stamina' && "Your physical building power, spent when harvesting pine trees or quarrying limestone ores. If it hits 0%, you collapse from exhaustion! Rest up, or heat up Potato Pies inside your Bag to recover."}
+                  {activeResourceTooltip === 'time' && "Tracks the dynamic day/night cycle of Greenwood. Time advances at 10 minutes per real second. Sunset and Night phases affect active lighting and visual theme overlay."}
                   {activeResourceTooltip === 'weather' && (
                     <span>
                       Greenwood&apos;s climate modulates active gathering yields & labor rules: 
@@ -3189,6 +3233,32 @@ export default function HomeView() {
                   <div className="absolute inset-0 bg-orange-400/[0.03] animate-pulse pointer-events-none" />
                 </div>
               )}
+
+              {/* Dawn Atmosphere Overlay */}
+              {timePeriodName === 'Dawn' && (
+                <div className="absolute inset-0 bg-gradient-to-t from-indigo-900/15 via-orange-500/10 to-amber-400/5 pointer-events-none z-30 mix-blend-color-burn" />
+              )}
+
+              {/* Sunset Atmosphere Overlay */}
+              {timePeriodName === 'Sunset' && (
+                <div className="absolute inset-0 bg-gradient-to-tr from-rose-800/20 via-orange-600/15 to-indigo-950/10 pointer-events-none z-30 mix-blend-color-burn" />
+              )}
+
+              {/* Night Mask & Radial Lantern Overlay */}
+              {timePeriodName === 'Night' && (() => {
+                const playerRelX = playerX - startX;
+                const playerRelY = playerY - startY;
+                const lanternXPercent = ((playerRelX + 0.5) / VIEWPORT_SIZE) * 100;
+                const lanternYPercent = ((playerRelY + 0.5) / VIEWPORT_SIZE) * 100;
+                return (
+                  <div 
+                    className="absolute inset-0 pointer-events-none z-30 mix-blend-multiply transition-all duration-300"
+                    style={{
+                      background: `radial-gradient(circle at ${lanternXPercent}% ${lanternYPercent}%, transparent 12%, rgba(2, 6, 23, 0.45) 24%, rgba(2, 6, 23, 0.95) 45%)`
+                    }}
+                  />
+                );
+              })()}
 
               {/* Map viewport coordinate grid (11x11 viewport) */}
               <div className="w-full h-full grid grid-cols-11 grid-rows-11 gap-0.5 aspect-square relative bg-zinc-950">
