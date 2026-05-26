@@ -691,6 +691,12 @@ export default function HomeView() {
   const [apprentices, setApprentices] = useState<DigitalApprentice[]>([]);
   const [cottagesCount, setCottagesCount] = useState(0);
 
+  // --- MOBILE OPTIMIZATION STATES ---
+  const [touchStartPos, setTouchStartPos] = useState<{ x: number; y: number } | null>(null);
+  const [isMapConsoleCollapsed, setIsMapConsoleCollapsed] = useState(true); // Right sidebar panel collapsible controls
+  const [isAutomationsCollapsed, setIsAutomationsCollapsed] = useState(true); // Apprentices guild collapsible controls
+  const [isLogsCollapsed, setIsLogsCollapsed] = useState(true); // Logs terminal collapsible controls
+
   const spawnApprenticeParticles = (tx: number, ty: number, toolType: 'wood' | 'stone' | 'clay') => {
     const arr: Particle[] = [];
     for (let i = 0; i < 6; i++) {
@@ -3213,11 +3219,45 @@ export default function HomeView() {
             {/* STAGE CONTAINER WITH COLLISION FEED AND PARTICLE CANVAS */}
             <div 
               id="cooperative_crt_viewport" 
-              className={`relative border-4 rounded-2xl bg-zinc-950 overflow-hidden shadow-2xl p-1.5 select-none aspect-square max-w-[550px] mx-auto w-full flex items-center justify-center transition-all duration-300
+              className={`relative border-4 rounded-2xl bg-zinc-950 overflow-hidden shadow-2xl p-1.5 select-none aspect-square max-w-[550px] mx-auto w-full flex items-center justify-center transition-all duration-300 touch-none
                 ${stamina <= 0 ? 'border-red-600 shadow-[0_0_25px_rgba(220,38,38,0.6)] animate-lowStaminaShake grayscale-100' : ''}
                 ${stamina > 0 && stamina <= 20 ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.25)] grayscale-30 animate-pulse' : ''}
                 ${stamina > 20 ? 'border-amber-500/40 shadow-2xl' : ''}
               `}
+              onTouchStart={(e) => {
+                if (e.touches ? e.touches.length > 0 : false) {
+                  setTouchStartPos({
+                    x: e.touches[0].clientX,
+                    y: e.touches[0].clientY
+                  });
+                }
+              }}
+              onTouchEnd={(e) => {
+                if (!touchStartPos || !e.changedTouches || e.changedTouches.length === 0) return;
+                const diffX = e.changedTouches[0].clientX - touchStartPos.x;
+                const diffY = e.changedTouches[0].clientY - touchStartPos.y;
+                const absX = Math.abs(diffX);
+                const absY = Math.abs(diffY);
+                const threshold = 30; // Min swipe distance in pixels
+                if (Math.max(absX, absY) > threshold) {
+                  if (absX > absY) {
+                    // Horizontal swipe
+                    if (diffX > 0) {
+                      attemptMove('E');
+                    } else {
+                      attemptMove('W');
+                    }
+                  } else {
+                    // Vertical swipe
+                    if (diffY > 0) {
+                      attemptMove('S');
+                    } else {
+                      attemptMove('N');
+                    }
+                  }
+                }
+                setTouchStartPos(null);
+              }}
             >
               
               {/* Dynamic canvas drawing overlay for physics sparks particles */}
@@ -3730,13 +3770,21 @@ export default function HomeView() {
             </div>
 
             {/* DENSE SYSTEM AUDIT LOGS FOOTER */}
-            <div id="dense_ledger_tracker_logs" className="p-3.5 bg-black/90 border border-yellow-500/20 rounded-xl space-y-1 font-mono text-[10px] sm:text-xs">
-              <span className="text-yellow-500/50 block font-bold uppercase tracking-widest text-[8.5px]">COMMUNITY TRANSMISSION SYSTEM:</span>
-              <div className="space-y-1 h-[95px] overflow-y-auto mt-1 scrollbar-none pr-1">
+            <div id="dense_ledger_tracker_logs" className="p-2 sm:p-3.5 bg-black/90 border border-yellow-500/20 rounded-xl space-y-1 font-mono text-[10px] sm:text-xs">
+              <div 
+                className="flex justify-between items-center cursor-pointer select-none pb-1"
+                onClick={() => setIsLogsCollapsed(!isLogsCollapsed)}
+              >
+                <span className="text-yellow-500/50 font-bold uppercase tracking-widest text-[8.5px] flex items-center gap-1">
+                  📟 COMMUNITY TRANSMISSION SYSTEM
+                </span>
+                <span className="text-yellow-500 text-[9px] sm:hidden">{isLogsCollapsed ? '▼ EXPAND' : '▲ COLLAPSE'}</span>
+              </div>
+              <div className={`space-y-1 mt-1 transition-all duration-300 overflow-y-auto scrollbar-none ${isLogsCollapsed ? 'max-h-0 sm:max-h-[95px] opacity-0 sm:opacity-100' : 'max-h-[95px] opacity-100'}`}>
                 {gameSystemLogs.map((log, lidx) => (
                   <p key={lidx} className="text-gray-300 leading-normal flex items-start gap-1">
                     <span className="text-yellow-500 leading-none">➔</span>
-                    <span className="flex-1">{log}</span>
+                    <span className="flex-1 text-[9px] sm:text-[11px]">{log}</span>
                   </p>
                 ))}
               </div>
@@ -3747,109 +3795,117 @@ export default function HomeView() {
           {/* RIGHT SIDE: SELECTED TILE CONSOLE, CONSTRUTION SUITE, APPRENTICE LEDGERS */}
           <div className="w-full md:w-[320px] flex flex-col space-y-4">
 
-            {/* LIVE SATELLITE HUD RADAR MINI-MAP */}
-            <MiniMap
-              mapGrid={mapGrid}
-              playerX={playerX}
-              playerY={playerY}
-              npcs={npcs}
-              apprentices={apprentices}
-              discoveredLandmarks={discoveredLandmarks}
-              restoredLandmarks={restoredLandmarks}
-              selectedX={selectedX}
-              selectedY={selectedY}
-              visitedCoordinates={visitedCoordinates}
-              onSelectTile={(x, y) => {
-                setSelectedX(x);
-                setSelectedY(y);
-                playRetroTone('strike', 0.2);
-              }}
-            />
-
-            {/* 🎛️ RETRO CHIPTUNE MUSIC BOX */}
-            <div id="retro_music_box" className="p-3.5 bg-[#0a0a0d]/98 border-2 border-yellow-500/30 rounded-xl space-y-3 shadow-2xl">
-              <div className="border-b border-yellow-500/20 pb-2 flex justify-between items-center select-none">
-                <span className="text-xs font-black text-yellow-405 font-mono uppercase tracking-wider flex items-center gap-1.5">
-                  📻 CHIPTUNE MUSIC BOX
+            {/* LIVE SATELLITE HUD RADAR MINI-MAP & CELL INSPECTOR (Collapsible) */}
+            <div className="bg-[#09090c]/95 border-2 border-yellow-500/30 rounded-xl overflow-hidden shadow-xl">
+              <div 
+                className="p-3 bg-zinc-950/80 border-b border-yellow-500/20 flex justify-between items-center cursor-pointer select-none"
+                onClick={() => setIsMapConsoleCollapsed(!isMapConsoleCollapsed)}
+              >
+                <span className="text-xs font-black text-white font-mono uppercase tracking-wider flex items-center gap-1.5">
+                  🗺️ CELL RADAR & INSPECTOR
                 </span>
-                {chiptunePlaying && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                )}
+                <span className="text-yellow-500 text-[9px] md:hidden">{isMapConsoleCollapsed ? '▼ EXPAND' : '▲ COLLAPSE'}</span>
               </div>
-
-              <div className="flex justify-center items-center gap-4 py-2 bg-black/60 rounded border border-white/5 relative overflow-hidden select-none">
-                <RotateCw 
-                  size={16} 
-                  className={`text-yellow-400/80 transition-transform ${chiptunePlaying ? 'animate-spin' : 'opacity-30'}`} 
-                  style={{ animationDuration: activeTrack === 'ragtime' ? '2.5s' : '3.8s' }} 
+              <div className={`p-3 space-y-4 transition-all duration-300 ${isMapConsoleCollapsed ? 'max-h-0 md:max-h-[9999px] opacity-0 md:opacity-100 overflow-hidden' : 'max-h-[9999px] opacity-100'}`}>
+                <MiniMap
+                  mapGrid={mapGrid}
+                  playerX={playerX}
+                  playerY={playerY}
+                  npcs={npcs}
+                  apprentices={apprentices}
+                  discoveredLandmarks={discoveredLandmarks}
+                  restoredLandmarks={restoredLandmarks}
+                  selectedX={selectedX}
+                  selectedY={selectedY}
+                  visitedCoordinates={visitedCoordinates}
+                  onSelectTile={(x, y) => {
+                    setSelectedX(x);
+                    setSelectedY(y);
+                    playRetroTone('strike', 0.2);
+                  }}
                 />
-                <div className="flex flex-col items-center">
-                  <span className="text-[7.5px] font-mono text-zinc-550 tracking-wider">ACTIVE DECK</span>
-                  <span className="text-[9px] font-mono font-black text-white uppercase tracking-wider truncate max-w-[120px]">
-                    {activeTrack === 'ragtime' ? "🎹 Ragtime Lull" : activeTrack === 'blues' ? "🎷 Slow Blues" : "💤 SILENT DECK"}
-                  </span>
+
+                {/* 🎛️ RETRO CHIPTUNE MUSIC BOX */}
+                <div id="retro_music_box" className="p-3 bg-[#0a0a0d]/98 border border-yellow-500/10 rounded-lg space-y-2">
+                  <div className="border-b border-yellow-500/10 pb-1 flex justify-between items-center select-none">
+                    <span className="text-[10px] font-black text-yellow-405 font-mono uppercase tracking-wider">
+                      📻 MUSIC BOX
+                    </span>
+                    {chiptunePlaying && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                    )}
+                  </div>
+
+                  <div className="flex justify-center items-center gap-2 py-1 bg-black/60 rounded border border-white/5 relative overflow-hidden select-none">
+                    <RotateCw 
+                      size={12} 
+                      className={`text-yellow-400/80 transition-transform ${chiptunePlaying ? 'animate-spin' : 'opacity-30'}`} 
+                      style={{ animationDuration: activeTrack === 'ragtime' ? '2.5s' : '3.8s' }} 
+                    />
+                    <div className="flex flex-col items-center">
+                      <span className="text-[8px] font-mono font-black text-white uppercase tracking-wider truncate max-w-[120px]">
+                        {activeTrack === 'ragtime' ? "🎹 Ragtime Lull" : activeTrack === 'blues' ? "🎷 Slow Blues" : "💤 SILENT DECK"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1 text-[8px] font-mono">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playRetroTone('success', 0.5);
+                        setActiveTrack('ragtime');
+                        setChiptunePlaying(true);
+                      }}
+                      className={`py-1 rounded text-center border font-bold uppercase cursor-pointer transition-all ${
+                        activeTrack === 'ragtime' && chiptunePlaying
+                          ? 'bg-yellow-600 border-yellow-500 text-black font-black' 
+                          : 'bg-zinc-950 border-white/5 text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      RAGTIME
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playRetroTone('success', 0.5);
+                        setActiveTrack('blues');
+                        setChiptunePlaying(true);
+                      }}
+                      className={`py-1 rounded text-center border font-bold uppercase cursor-pointer transition-all ${
+                        activeTrack === 'blues' && chiptunePlaying
+                          ? 'bg-yellow-600 border-yellow-500 text-black font-black' 
+                          : 'bg-zinc-950 border-white/5 text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      BLUES
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playRetroTone('strike', 0.5);
+                        setChiptunePlaying(false);
+                        setActiveTrack('none');
+                      }}
+                      className={`py-1 rounded text-center border font-bold uppercase cursor-pointer transition-all ${
+                        activeTrack === 'none' || !chiptunePlaying
+                          ? 'bg-zinc-800 border-zinc-700 text-gray-300' 
+                          : 'bg-zinc-950 border-white/5 text-red-400 hover:text-red-300'
+                      }`}
+                    >
+                      STOP
+                    </button>
+                  </div>
                 </div>
-                <RotateCw 
-                  size={16} 
-                  className={`text-yellow-400/80 transition-transform ${chiptunePlaying ? 'animate-spin' : 'opacity-30'}`} 
-                  style={{ animationDuration: activeTrack === 'ragtime' ? '2.5s' : '3.8s' }} 
-                />
-              </div>
 
-              <div className="grid grid-cols-3 gap-1.5 text-[8.5px] font-mono">
-                <button
-                  type="button"
-                  onClick={() => {
-                    playRetroTone('success', 0.5);
-                    setActiveTrack('ragtime');
-                    setChiptunePlaying(true);
-                  }}
-                  className={`py-1 rounded text-center border font-bold uppercase cursor-pointer transition-all ${
-                    activeTrack === 'ragtime' && chiptunePlaying
-                      ? 'bg-yellow-600 border-yellow-500 text-black font-black' 
-                      : 'bg-zinc-950 border-white/5 text-gray-400 hover:text-white'
-                  }`}
-                >
-                  RAGTIME
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    playRetroTone('success', 0.5);
-                    setActiveTrack('blues');
-                    setChiptunePlaying(true);
-                  }}
-                  className={`py-1 rounded text-center border font-bold uppercase cursor-pointer transition-all ${
-                    activeTrack === 'blues' && chiptunePlaying
-                      ? 'bg-yellow-600 border-yellow-500 text-black font-black' 
-                      : 'bg-zinc-950 border-white/5 text-gray-400 hover:text-white'
-                  }`}
-                >
-                  BLUES
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    playRetroTone('strike', 0.5);
-                    setChiptunePlaying(false);
-                    setActiveTrack('none');
-                  }}
-                  className={`py-1 rounded text-center border font-bold uppercase cursor-pointer transition-all ${
-                    activeTrack === 'none' || !chiptunePlaying
-                      ? 'bg-zinc-800 border-zinc-700 text-gray-300' 
-                      : 'bg-zinc-950 border-white/5 text-red-400 hover:text-red-300'
-                  }`}
-                >
-                  STOP
-                </button>
+                <div className="flex items-center justify-between text-[8px] font-mono text-gray-500 pt-1 select-none">
+                  <span className="flex items-center gap-1">
+                    🔊 VOL: {Math.round(masterVolume * 100)}%
+                  </span>
+                  <span className="text-[7.5px] tracking-tight">WEB AUDIO SYNTH PROTOCOL</span>
+                </div>
               </div>
-
-              <div className="flex items-center justify-between text-[8px] font-mono text-gray-500 pt-1 select-none">
-                <span className="flex items-center gap-1">
-                  🔊 VOL: {Math.round(masterVolume * 100)}%
-                </span>
-                <span className="text-[7.5px] tracking-tight">WEB AUDIO SYNTH PROTOCOL</span>
-              </div>
+            </div>
             </div>
             
             {/* VIEWPORT CONSOLE SELECTIONS */}
@@ -4290,62 +4346,72 @@ export default function HomeView() {
               })()}
             </div>
 
-            {/* DIGITAL LABOR MATRIX COMPANIONS */}
-            <div id="apprentices_contracts_panel" className="p-4 bg-[#09090c]/95 border-2 border-yellow-500/30 rounded-xl space-y-3 shadow-xl">
-              <div className="border-b border-yellow-500/20 pb-2">
-                <span className="text-xs font-black text-white font-mono uppercase block">Apprentice Automation Ledger</span>
-                <span className="text-[8.5px] text-gray-400 block mt-1 leading-normal">
-                  Contract specialized automated companions. Each targets nodes, harvests and deposits raw goods to ledger (+3 wood/stone/clay) on independent cycles.
+            {/* DIGITAL LABOR MATRIX COMPANIONS (Collapsible) */}
+            <div id="apprentices_contracts_panel" className="bg-[#09090c]/95 border-2 border-yellow-500/30 rounded-xl overflow-hidden shadow-xl">
+              <div 
+                className="p-3 bg-zinc-950/80 border-b border-yellow-500/20 flex justify-between items-center cursor-pointer select-none"
+                onClick={() => setIsAutomationsCollapsed(!isAutomationsCollapsed)}
+              >
+                <span className="text-xs font-black text-white font-mono uppercase tracking-wider flex items-center gap-1.5">
+                  🤖 AUTOMATION MATRIX
                 </span>
+                <span className="text-yellow-500 text-[9px] md:hidden">{isAutomationsCollapsed ? '▼ EXPAND' : '▲ COLLAPSE'}</span>
               </div>
+              <div className={`p-4 space-y-3 transition-all duration-300 ${isAutomationsCollapsed ? 'max-h-0 md:max-h-[9999px] opacity-0 md:opacity-100 overflow-hidden' : 'max-h-[9999px] opacity-100'}`}>
+                <div className="border-b border-white/5 pb-2">
+                  <span className="text-[10px] font-black text-yellow-405 font-mono uppercase block">Apprentice Automation Ledger</span>
+                  <span className="text-[8.5px] text-gray-400 block mt-1 leading-normal">
+                    Contract specialized automated companions. Each targets nodes, harvests and deposits raw goods to ledger (+3 wood/stone/clay) on independent cycles.
+                  </span>
+                </div>
 
-              <div className="grid grid-cols-3 gap-1 px-1 text-[9px] sm:text-[10px]">
-                <button
-                  onClick={() => hireApprentice('wood')}
-                  className="py-1.5 bg-emerald-850 hover:bg-emerald-750 text-white font-extrabold uppercase rounded border border-emerald-500/30 font-mono active:scale-95 transition-all leading-tight text-center"
-                >
-                  🪵 Wood AP
-                </button>
-                <button
-                  onClick={() => hireApprentice('stone')}
-                  className="py-1.5 bg-amber-850 hover:bg-amber-750 text-white font-extrabold uppercase rounded border border-amber-500/30 font-mono active:scale-95 transition-all leading-tight text-center"
-                >
-                  ⛏️ Ore AP
-                </button>
-                <button
-                  onClick={() => hireApprentice('clay')}
-                  className="py-1.5 bg-[#4a2e1b] hover:bg-[#5f3e27] text-white font-extrabold uppercase rounded border border-[#27190d]/30 font-mono active:scale-95 transition-all leading-tight text-center"
-                >
-                  🏺 Clay AP
-                </button>
-              </div>
+                <div className="grid grid-cols-3 gap-1 px-1 text-[9px] sm:text-[10px]">
+                  <button
+                    onClick={() => hireApprentice('wood')}
+                    className="py-1.5 bg-emerald-850 hover:bg-emerald-750 text-white font-extrabold uppercase rounded border border-emerald-500/30 font-mono active:scale-95 transition-all leading-tight text-center"
+                  >
+                    🪵 Wood AP
+                  </button>
+                  <button
+                    onClick={() => hireApprentice('stone')}
+                    className="py-1.5 bg-amber-850 hover:bg-amber-750 text-white font-extrabold uppercase rounded border border-amber-500/30 font-mono active:scale-95 transition-all leading-tight text-center"
+                  >
+                    ⛏️ Ore AP
+                  </button>
+                  <button
+                    onClick={() => hireApprentice('clay')}
+                    className="py-1.5 bg-[#4a2e1b] hover:bg-[#5f3e27] text-white font-extrabold uppercase rounded border border-[#27190d]/30 font-mono active:scale-95 transition-all leading-tight text-center"
+                  >
+                    🏺 Clay AP
+                  </button>
+                </div>
 
-              {/* Hired list status */}
-              <div className="space-y-1.5 max-h-[120px] overflow-y-auto mt-2">
-                {apprentices.length === 0 ? (
-                  <p className="text-[10px] text-gray-500 text-center py-2 italic font-mono">No active contractors found.</p>
-                ) : (
-                  apprentices.map((app, appIdx) => (
-                    <div key={appIdx} className="p-2 bg-black/60 rounded border border-white/5 flex justify-between items-center text-[9.5px] font-mono leading-none">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm">{app.type === 'wood' ? '🪓' : app.type === 'stone' ? '⛏️' : '🏺'}</span>
-                        <div>
-                          <span className="text-white block font-black">Apprentice #{appIdx + 1}</span>
-                          <span className="text-gray-500 text-[8px] mt-0.5 block">State: {app.state.toUpperCase()}</span>
+                {/* Hired list status */}
+                <div className="space-y-1.5 max-h-[120px] overflow-y-auto mt-2">
+                  {apprentices.length === 0 ? (
+                    <p className="text-[10px] text-gray-500 text-center py-2 italic font-mono">No active contractors found.</p>
+                  ) : (
+                    apprentices.map((app, appIdx) => (
+                      <div key={appIdx} className="p-2 bg-black/60 rounded border border-white/5 flex justify-between items-center text-[9.5px] font-mono leading-none">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm">{app.type === 'wood' ? '🪓' : app.type === 'stone' ? '⛏️' : '🏺'}</span>
+                          <div>
+                            <span className="text-white block font-black">Apprentice #{appIdx + 1}</span>
+                            <span className="text-gray-500 text-[8px] mt-0.5 block">State: {app.state.toUpperCase()}</span>
+                          </div>
                         </div>
+                        <span className="bg-yellow-500/10 text-yellow-400 px-1.5 py-0.5 rounded text-[8px] font-bold">
+                          {app.type.toUpperCase()}
+                        </span>
                       </div>
-                      <span className="bg-yellow-500/10 text-yellow-400 px-1.5 py-0.5 rounded text-[8px] font-bold">
-                        {app.type.toUpperCase()}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
+                    ))
+                  )}
+                </div>
 
-              {/* Guild Upgrades block */}
-              <div className="border-t border-yellow-500/20 pt-2.5 mt-2 space-y-2">
-                <span className="text-[10px] text-yellow-400 font-bold block uppercase tracking-wider font-mono">🚀 Apprentice Guild Upgrades</span>
-                <div className="grid grid-cols-2 gap-2 text-[9.5px]">
+                {/* Guild Upgrades block */}
+                <div className="border-t border-yellow-500/20 pt-2.5 mt-2 space-y-2">
+                  <span className="text-[10px] text-yellow-400 font-bold block uppercase tracking-wider font-mono">🚀 Apprentice Guild Upgrades</span>
+                  <div className="grid grid-cols-2 gap-2 text-[9.5px]">
                   {/* SPEED */}
                   <div className="p-2 bg-zinc-950 rounded border border-white/5 flex flex-col justify-between">
                     <div>
