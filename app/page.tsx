@@ -963,10 +963,8 @@ export default function HomeView() {
   let currentTrackUrl: string | null = null;
   if (chiptunePlaying && activeTrack !== 'none') {
     currentTrackUrl = null;
-  } else if (screen === 'splash' || screen === 'creator') {
-    currentTrackUrl = '/music/GreenWood Main Menu.m4a';
-  } else if (screen === 'game') {
-    currentTrackUrl = '/music/soundtrack.mp3';
+  } else if (screen === 'splash' || screen === 'creator' || screen === 'game') {
+    currentTrackUrl = '/music/GreenWood Trade Academy.m4a';
   }
 
   const { playAchievementSfx } = useAudioPlayer(currentTrackUrl, masterVolume, isMuted, hasInteracted);
