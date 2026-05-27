@@ -1125,6 +1125,7 @@ export default function HomeView() {
   const handleManualSave = () => {
     try {
       const payload = {
+        screen,
         charName, charSkin, charHair, clothing, charAccessory, charGender, charArchetype,
         charOrigin, charHeirloom,
         playerX: playerXRef.current, playerY: playerYRef.current, direction, playerDirection,
@@ -1168,6 +1169,7 @@ export default function HomeView() {
           setCharArchetype(parsed.charArchetype ?? 'merchant');
           setCharOrigin(parsed.charOrigin ?? 'homestead');
           setCharHeirloom(parsed.charHeirloom ?? 'none');
+          setScreen(parsed.screen ?? 'splash');
           
           setPlayerX(parsed.playerX ?? 16);
           setPlayerY(parsed.playerY ?? 19);
@@ -1234,7 +1236,7 @@ export default function HomeView() {
     }, 10000);
     return () => clearInterval(timer);
   }, [
-    charName, charSkin, charHair, clothing, charAccessory, charGender, charArchetype, charOrigin, charHeirloom,
+    screen, charName, charSkin, charHair, clothing, charAccessory, charGender, charArchetype, charOrigin, charHeirloom,
     wood, stone, clay, ceramics, polishedPlank, reinforcedBrick, bswx, reputation, legacyPoints, stamina,
     questStageGurley, questStageRector, questStageStradford, questStageGerumba, mapGrid, apprentices, cottagesCount, heritageCatalystTime,
     visitedCoordinates, discoveredLandmarks, paidRespectsToday, restoredLandmarks, apprenticeSpeedLvl, apprenticeOutputLvl,
