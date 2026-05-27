@@ -6,28 +6,20 @@ export function useAudioPlayer(
   isMuted: boolean,
   hasInteracted: boolean
 ) {
-  const audio1Ref = useRef<HTMLAudioElement | null>(null);
-  const audio2Ref = useRef<HTMLAudioElement | null>(null);
-  const activeIndexRef = useRef<1 | 2>(1);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentPlayingUrlRef = useRef<string | null>(null);
   const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize audio elements
+  // Initialize single audio element
   useEffect(() => {
     if (typeof window !== 'undefined' && typeof window.Audio !== 'undefined') {
-      audio1Ref.current = new window.Audio();
-      audio1Ref.current.loop = true;
-      audio2Ref.current = new window.Audio();
-      audio2Ref.current.loop = true;
+      audioRef.current = new window.Audio();
+      audioRef.current.loop = true;
     }
     return () => {
-      if (audio1Ref.current) {
-        audio1Ref.current.pause();
-        audio1Ref.current.src = '';
-      }
-      if (audio2Ref.current) {
-        audio2Ref.current.pause();
-        audio2Ref.current.src = '';
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
       }
       if (fadeIntervalRef.current) {
         clearInterval(fadeIntervalRef.current);
@@ -35,110 +27,115 @@ export function useAudioPlayer(
     };
   }, []);
 
-  // Handle track changes, crossfades, volume, and muting
+  // Handle track changes, volume, and muting
   useEffect(() => {
     if (!hasInteracted) return;
 
-    const audio1 = audio1Ref.current;
-    const audio2 = audio2Ref.current;
-    if (!audio1 || !audio2) return;
+    const audio = audioRef.current;
+    if (!audio) return;
 
     const targetMaxVol = isMuted ? 0 : masterVolume * 0.4;
 
-    const stopAudio = (audio: HTMLAudioElement) => {
+    // Helper to change track immediately
+    const playNewTrack = (url: string) => {
       try {
         audio.pause();
-        audio.src = '';
+        audio.src = url;
         audio.volume = 0;
-      } catch (e) {}
-    };
-
-    // If no track url is active (e.g. game is paused or chiptunes are playing)
-    if (!currentTrackUrl) {
-      if (fadeIntervalRef.current) {
-        clearInterval(fadeIntervalRef.current);
-        fadeIntervalRef.current = null;
-      }
-
-      const activeAudio = activeIndexRef.current === 1 ? audio1 : audio2;
-      const startVol = activeAudio.volume;
-
-      if (startVol > 0 && !activeAudio.paused) {
+        currentPlayingUrlRef.current = url;
+        if (!isMuted) {
+          audio.play().catch(() => {});
+        }
+        
+        // Fade in
+        if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
         let fadeStep = 0;
         fadeIntervalRef.current = setInterval(() => {
-          fadeStep += 0.05;
+          fadeStep += 0.1;
           if (fadeStep >= 1) {
             if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
             fadeIntervalRef.current = null;
-            stopAudio(audio1);
-            stopAudio(audio2);
-            currentPlayingUrlRef.current = null;
+            audio.volume = targetMaxVol;
           } else {
-            activeAudio.volume = Math.max(0, startVol * (1 - fadeStep));
+            audio.volume = fadeStep * targetMaxVol;
           }
         }, 50);
-      } else {
-        stopAudio(audio1);
-        stopAudio(audio2);
-        currentPlayingUrlRef.current = null;
-      }
+      } catch (e) {}
+    };
+
+    // Helper to fade out and stop
+    const stopPlaying = () => {
+      try {
+        if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
+        
+        const startVol = audio.volume;
+        if (startVol > 0 && !audio.paused) {
+          let fadeStep = 0;
+          fadeIntervalRef.current = setInterval(() => {
+            fadeStep += 0.1;
+            if (fadeStep >= 1) {
+              if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
+              fadeIntervalRef.current = null;
+              audio.pause();
+              audio.src = '';
+              audio.volume = 0;
+              currentPlayingUrlRef.current = null;
+            } else {
+              audio.volume = Math.max(0, startVol * (1 - fadeStep));
+            }
+          }, 50);
+        } else {
+          audio.pause();
+          audio.src = '';
+          audio.volume = 0;
+          currentPlayingUrlRef.current = null;
+        }
+      } catch (e) {}
+    };
+
+    // If no track url is active
+    if (!currentTrackUrl) {
+      stopPlaying();
       return;
     }
 
-    // If same track is playing, update volume and playing state
+    // If target track is already playing, sync volume and play/pause state
     if (currentTrackUrl === currentPlayingUrlRef.current) {
-      const activeAudio = activeIndexRef.current === 1 ? audio1 : audio2;
-      const inactiveAudio = activeIndexRef.current === 1 ? audio2 : audio1;
-
-      stopAudio(inactiveAudio);
-
       if (isMuted) {
-        activeAudio.volume = 0;
+        audio.volume = 0;
       } else {
         if (!fadeIntervalRef.current) {
-          activeAudio.volume = targetMaxVol;
+          audio.volume = targetMaxVol;
         }
-        if (activeAudio.paused) {
-          activeAudio.play().catch(() => {});
+        if (audio.paused) {
+          audio.play().catch(() => {});
         }
       }
       return;
     }
 
-    // Crossfade to new track
+    // Otherwise, transition to new track (fade out first, then play new track)
     if (fadeIntervalRef.current) {
       clearInterval(fadeIntervalRef.current);
       fadeIntervalRef.current = null;
     }
 
-    const currentAudio = activeIndexRef.current === 1 ? audio1 : audio2;
-    const nextAudio = activeIndexRef.current === 1 ? audio2 : audio1;
-
-    currentPlayingUrlRef.current = currentTrackUrl;
-    activeIndexRef.current = activeIndexRef.current === 1 ? 2 : 1;
-
-    // Setup and play next audio
-    nextAudio.src = currentTrackUrl;
-    nextAudio.volume = 0;
-    if (!isMuted) {
-      nextAudio.play().catch(() => {});
+    const startVol = audio.volume;
+    if (startVol > 0 && !audio.paused) {
+      let fadeStep = 0;
+      fadeIntervalRef.current = setInterval(() => {
+        fadeStep += 0.1;
+        if (fadeStep >= 1) {
+          if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
+          fadeIntervalRef.current = null;
+          playNewTrack(currentTrackUrl);
+        } else {
+          audio.volume = Math.max(0, startVol * (1 - fadeStep));
+        }
+      }, 50);
+    } else {
+      playNewTrack(currentTrackUrl);
     }
-
-    const startVol = currentAudio.volume;
-    let fadeStep = 0;
-
-    fadeIntervalRef.current = setInterval(() => {
-      fadeStep += 0.05;
-      if (fadeStep >= 1) {
-        if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
-        fadeIntervalRef.current = null;
-        stopAudio(currentAudio);
-        nextAudio.volume = targetMaxVol;
-      } else {
-        nextAudio.volume = fadeStep * targetMaxVol;
-        currentAudio.volume = Math.max(0, (1 - fadeStep) * startVol);
-      }
-    }, 50);
 
   }, [currentTrackUrl, masterVolume, isMuted, hasInteracted]);
 
@@ -151,4 +148,5 @@ export function useAudioPlayer(
 
   return { playAchievementSfx };
 }
+
 
