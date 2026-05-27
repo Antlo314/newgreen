@@ -693,9 +693,18 @@ export default function HomeView() {
 
   // --- MOBILE OPTIMIZATION STATES ---
   const [touchStartPos, setTouchStartPos] = useState<{ x: number; y: number } | null>(null);
-  const [isMapConsoleCollapsed, setIsMapConsoleCollapsed] = useState(true); // Right sidebar panel collapsible controls
-  const [isAutomationsCollapsed, setIsAutomationsCollapsed] = useState(true); // Apprentices guild collapsible controls
-  const [isLogsCollapsed, setIsLogsCollapsed] = useState(true); // Logs terminal collapsible controls
+  const [isMapConsoleCollapsed, setIsMapConsoleCollapsed] = useState(true); // Default collapsed on mobile, expandable
+  const [isAutomationsCollapsed, setIsAutomationsCollapsed] = useState(true);
+  const [isLogsCollapsed, setIsLogsCollapsed] = useState(true);
+
+  // Automatically expand panels on larger desktop screens on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+      setIsMapConsoleCollapsed(false);
+      setIsAutomationsCollapsed(false);
+      setIsLogsCollapsed(false);
+    }
+  }, []);
 
   const spawnApprenticeParticles = (tx: number, ty: number, toolType: 'wood' | 'stone' | 'clay') => {
     const arr: Particle[] = [];
@@ -3848,15 +3857,40 @@ export default function HomeView() {
             </div>
 
             {/* RETRO D-PAD NAVIGATION FOR TOUCH MOBILE */}
-            <div id="navigation_controls_dpad" className="grid grid-cols-3 gap-1 max-w-[170px] mx-auto select-none sm:hidden">
+            <div id="navigation_controls_dpad" className="grid grid-cols-3 gap-2 max-w-[200px] mx-auto select-none md:hidden py-2">
               <div />
-              <button onClick={() => attemptMove('N')} className="p-3 bg-zinc-900 border border-yellow-500/20 text-white rounded active:bg-yellow-500 active:text-black">▲</button>
+              <button 
+                onClick={() => attemptMove('N')} 
+                className="w-12 h-12 bg-zinc-900/90 active:bg-yellow-500 active:text-black border-2 border-yellow-500/30 text-yellow-405 font-black text-xl rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition-all transform select-none"
+              >
+                ▲
+              </button>
               <div />
-              <button onClick={() => attemptMove('W')} className="p-3 bg-zinc-900 border border-yellow-500/20 text-white rounded active:bg-yellow-500 active:text-black">◀</button>
-              <button onClick={() => handleActionInput()} className="p-3 bg-yellow-600 text-black font-black text-xs rounded uppercase">ACT</button>
-              <button onClick={() => attemptMove('E')} className="p-3 bg-zinc-900 border border-yellow-500/20 text-white rounded active:bg-yellow-500 active:text-black">▶</button>
+              <button 
+                onClick={() => attemptMove('W')} 
+                className="w-12 h-12 bg-zinc-900/90 active:bg-yellow-500 active:text-black border-2 border-yellow-500/30 text-yellow-405 font-black text-xl rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition-all transform select-none"
+              >
+                ◀
+              </button>
+              <button 
+                onClick={() => handleActionInput()} 
+                className="w-12 h-12 bg-yellow-600 active:bg-yellow-400 text-black font-mono font-black text-[10px] rounded-full border-2 border-yellow-350 flex items-center justify-center shadow-xl active:scale-90 transition-all select-none"
+              >
+                ACT
+              </button>
+              <button 
+                onClick={() => attemptMove('E')} 
+                className="w-12 h-12 bg-zinc-900/90 active:bg-yellow-500 active:text-black border-2 border-yellow-500/30 text-yellow-405 font-black text-xl rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition-all transform select-none"
+              >
+                ▶
+              </button>
               <div />
-              <button onClick={() => attemptMove('S')} className="p-3 bg-zinc-900 border border-yellow-500/20 text-white rounded active:bg-yellow-500 active:text-black">▼</button>
+              <button 
+                onClick={() => attemptMove('S')} 
+                className="w-12 h-12 bg-zinc-900/90 active:bg-yellow-500 active:text-black border-2 border-yellow-500/30 text-yellow-405 font-black text-xl rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition-all transform select-none"
+              >
+                ▼
+              </button>
               <div />
             </div>
 
