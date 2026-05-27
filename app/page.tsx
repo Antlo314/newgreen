@@ -966,19 +966,7 @@ export default function HomeView() {
   } else if (screen === 'splash' || screen === 'creator') {
     currentTrackUrl = '/music/GreenWood Main Menu.m4a';
   } else if (screen === 'game') {
-    if (activeNPC !== null || isLeaderboardOpen) {
-      currentTrackUrl = '/music/GreenWood Founding Members.m4a';
-    } else if (isGamePaused) {
-      if (pauseMenuTab === 'academy' || pauseMenuTab === 'legacy' || pauseMenuTab === 'favors') {
-        currentTrackUrl = '/music/GreenWood Trade Academy.m4a';
-      } else if (pauseMenuTab === 'exchange' || pauseMenuTab === 'inventory' || pauseMenuTab === 'crafting') {
-        currentTrackUrl = '/music/GreenWood Ledger & Market Hub.m4a';
-      } else {
-        currentTrackUrl = '/music/soundtrack.mp3';
-      }
-    } else {
-      currentTrackUrl = '/music/soundtrack.mp3';
-    }
+    currentTrackUrl = '/music/soundtrack.mp3';
   }
 
   const { playAchievementSfx } = useAudioPlayer(currentTrackUrl, masterVolume, isMuted, hasInteracted);
