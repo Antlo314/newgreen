@@ -2689,16 +2689,16 @@ export default function HomeView() {
     <div id="landing_sandbox_screen" className="flex flex-col min-h-screen bg-[#070708] text-yellow-500 overflow-x-hidden relative font-sans select-none antialiased">
       
       {/* 1. TOP HEADER STATUS BANNER */}
-      <header id="district_ledgers_header" className={`relative z-30 flex flex-wrap justify-between items-center p-3 sm:p-4 bg-zinc-950/80 border-b border-yellow-500/20 backdrop-blur-md sticky top-0 ${heritageCatalystTime > 0 ? 'ring-2 ring-yellow-400/85 shadow-[0_0_15px_#ca8a04]' : ''}`}>
-        <div className="flex items-center gap-2.5">
-          <div className="h-9 w-9 bg-gradient-to-br from-[#22c55e] to-emerald-800 rounded-lg flex items-center justify-center border-2 border-emerald-400 font-extrabold text-black text-lg animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.3)]">
+      <header id="district_ledgers_header" className={`relative z-30 h-16 flex items-center justify-between px-4 bg-zinc-950/90 border-b border-yellow-500/20 backdrop-blur-md sticky top-0 w-full select-none ${heritageCatalystTime > 0 ? 'ring-2 ring-yellow-400/85 shadow-[0_0_15px_#ca8a04]' : ''}`}>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="h-9 w-9 bg-gradient-to-br from-[#22c55e] to-emerald-800 rounded-lg flex items-center justify-center border-2 border-emerald-400 font-extrabold text-black text-lg animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.3)] flex-shrink-0">
             G
           </div>
-          <div>
-            <h1 className="text-sm font-black text-white hover:text-emerald-400 font-mono tracking-widest uppercase truncate leading-none">NEW GREENWOOD</h1>
-            <div className="text-[9px] text-gray-400 mt-1 flex flex-wrap items-center gap-2 font-sans select-none">
+          <div className="min-w-0">
+            <h1 className="text-xs sm:text-sm font-black text-white hover:text-emerald-400 font-mono tracking-widest uppercase truncate leading-none">NEW GREENWOOD</h1>
+            <div className="text-[8px] sm:text-[9px] text-gray-405 mt-1 flex items-center gap-2 font-sans select-none truncate">
               <span className="flex items-center gap-1">
-                <span>GROWTH MULTIPLIER:</span> 
+                <span>GROWTH:</span> 
                 <span className="text-yellow-500 font-bold font-mono">{(Math.pow(1.5, cottagesCount)).toFixed(2)}x</span>
               </span>
               <span className="text-zinc-700">|</span>
@@ -2713,7 +2713,7 @@ export default function HomeView() {
                 {weather === 'rainy' && "🌧 RAIN"}
                 {weather === 'foggy' && "🌫 FOG"}
                 {weather === 'sunset_glow' && "🌇 SUNSET"}
-                <span className="opacity-60 ml-1">({weatherTimer}s)</span>
+                <span className="opacity-60 ml-0.5">({weatherTimer}s)</span>
               </button>
               <span className="text-zinc-700">|</span>
               <button 
@@ -2730,7 +2730,7 @@ export default function HomeView() {
         </div>
 
         {/* Resources ledger ticker widgets */}
-        <div id="persistent_subsystems_ledger" className="flex items-center gap-1.5 sm:gap-3 flex-wrap mt-2 sm:mt-0 text-[10px] sm:text-xs">
+        <div id="persistent_subsystems_ledger" className="flex items-center gap-1 sm:gap-2 text-[9px] sm:text-xs">
           
           <motion.button
             onMouseEnter={() => setActiveResourceTooltip('time')}
@@ -2738,7 +2738,7 @@ export default function HomeView() {
             onClick={() => setActiveResourceTooltip(activeResourceTooltip === 'time' ? null : 'time')}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className={`flex items-center gap-1 bg-zinc-900 border px-2 py-1 rounded text-white font-mono font-bold shadow-inner cursor-help transition-all duration-300 ${
+            className={`flex items-center gap-0.5 bg-zinc-900 border px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-white font-mono font-bold shadow-inner cursor-help transition-all duration-300 ${
               activeResourceTooltip === 'time' 
                 ? 'border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.6)]' 
                 : 'border-yellow-500/35 shadow-[0_0_8px_rgba(250,204,21,0.15)]'
@@ -2746,8 +2746,8 @@ export default function HomeView() {
             title="Click to learn about Time & Cycles"
           >
             <span>{timeIcon}</span>
-            <span className="text-yellow-400">{gameFormattedTime}</span>
-            <span className="text-[7.5px] opacity-60 uppercase font-mono tracking-wider ml-0.5">{timePeriodName}</span>
+            <span className="text-yellow-400 font-mono">{gameFormattedTime}</span>
+            <span className="text-[7.5px] opacity-60 uppercase font-mono tracking-wider ml-0.5 hidden sm:inline-block">{timePeriodName}</span>
           </motion.button>
 
           <motion.button 
@@ -2762,20 +2762,20 @@ export default function HomeView() {
               backgroundColor: bswxPulseType === 'up' ? 'rgba(234, 179, 8, 0.35)' : bswxPulseType === 'down' ? 'rgba(239, 68, 68, 0.25)' : (activeResourceTooltip === 'bswx' ? 'rgba(66, 32, 6, 0.4)' : 'rgba(66, 32, 6, 0.15)'),
             }}
             transition={{ type: "spring", stiffness: 300, damping: 15 }}
-            className={`flex items-center gap-1 px-2 py-1 rounded cursor-help border transition-all duration-300 ${
+            className={`flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded cursor-help border transition-all duration-300 ${
               activeResourceTooltip === 'bswx' 
                 ? 'shadow-[0_0_15px_rgba(234,179,8,0.6)]' 
                 : 'shadow-[0_0_8px_rgba(234,179,8,0.15)]'
             }`}
             title="Click to learn about Town Coins"
           >
-            <Coins size={11} className={`transition-transform duration-300 ${bswxPulseType === 'up' ? 'scale-125 text-yellow-300 animate-pulse' : bswxPulseType === 'down' ? 'scale-75 text-red-400' : 'text-amber-500'}`} />
+            <Coins size={10} className={`transition-transform duration-300 ${bswxPulseType === 'up' ? 'scale-125 text-yellow-300 animate-pulse' : bswxPulseType === 'down' ? 'scale-75 text-red-400' : 'text-amber-500'}`} />
             <span 
               className={`font-mono font-extrabold transition-colors duration-300 ${bswxPulseType === 'up' ? 'text-yellow-300 font-black' : bswxPulseType === 'down' ? 'text-red-400' : 'text-white'}`}
             >
               {bswx.toFixed(1)}
             </span>
-            <span className="text-[7.5px] text-yellow-500/60 uppercase font-mono tracking-wider hidden sm:inline-block ml-0.5">Coins</span>
+            <span className="text-[7.5px] text-yellow-500/60 uppercase font-mono tracking-wider hidden md:inline-block ml-0.5">Coins</span>
           </motion.button>
 
           <motion.button 
@@ -2790,20 +2790,20 @@ export default function HomeView() {
               backgroundColor: repPulseType === 'up' ? 'rgba(52, 211, 153, 0.35)' : repPulseType === 'down' ? 'rgba(239, 68, 68, 0.25)' : (activeResourceTooltip === 'rep' ? 'rgba(6, 78, 59, 0.4)' : 'rgba(6, 78, 59, 0.15)'),
             }}
             transition={{ type: "spring", stiffness: 300, damping: 15 }}
-            className={`flex items-center gap-1 px-2 py-1 rounded cursor-help border transition-all duration-300 ${
+            className={`flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded cursor-help border transition-all duration-300 ${
               activeResourceTooltip === 'rep' 
                 ? 'shadow-[0_0_15px_rgba(52,211,153,0.6)]' 
                 : 'shadow-[0_0_8px_rgba(52,211,153,0.15)]'
             }`}
             title="Click to learn about Reputation"
           >
-            <TrendingUp size={11} className={`transition-transform duration-300 ${repPulseType === 'up' ? 'scale-125 text-emerald-300 animate-pulse' : repPulseType === 'down' ? 'scale-75 text-red-400' : 'text-emerald-500'}`} />
+            <TrendingUp size={10} className={`transition-transform duration-300 ${repPulseType === 'up' ? 'scale-125 text-emerald-300 animate-pulse' : repPulseType === 'down' ? 'scale-75 text-red-400' : 'text-emerald-500'}`} />
             <span 
-              className={`font-mono font-black transition-colors duration-300 ${repPulseType === 'up' ? 'text-emerald-300 font-extrabold' : repPulseType === 'down' ? 'text-red-400' : 'text-emerald-400'}`}
+              className={`font-mono font-extrabold transition-colors duration-300 ${repPulseType === 'up' ? 'text-emerald-300 font-black' : repPulseType === 'down' ? 'text-red-400' : 'text-white'}`}
             >
-              {reputation.toFixed(1)}
+              {reputation}
             </span>
-            <span className="text-[7.5px] text-emerald-500/60 uppercase font-mono tracking-wider hidden sm:inline-block ml-0.5">REP</span>
+            <span className="text-[7.5px] text-emerald-500/60 uppercase font-mono tracking-wider hidden md:inline-block ml-0.5">Rep</span>
           </motion.button>
 
           <motion.button 
@@ -2818,20 +2818,20 @@ export default function HomeView() {
               backgroundColor: lpPulseType === 'up' ? 'rgba(250, 204, 21, 0.35)' : lpPulseType === 'down' ? 'rgba(239, 68, 68, 0.25)' : (activeResourceTooltip === 'lp' ? 'rgba(66, 32, 6, 0.4)' : 'rgba(66, 32, 6, 0.15)'),
             }}
             transition={{ type: "spring", stiffness: 300, damping: 15 }}
-            className={`flex items-center gap-1 px-2 py-1 rounded cursor-help border transition-all duration-300 ${
+            className={`flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded cursor-help border transition-all duration-300 ${
               activeResourceTooltip === 'lp' 
                 ? 'shadow-[0_0_15px_rgba(250,204,21,0.6)]' 
                 : 'shadow-[0_0_8px_rgba(250,204,21,0.15)]'
             }`}
             title="Click to learn about Legacy Points"
           >
-            <Crown size={11} className={`transition-transform duration-300 ${lpPulseType === 'up' ? 'scale-125 text-yellow-300 animate-pulse' : lpPulseType === 'down' ? 'scale-75 text-red-400' : 'text-yellow-400'}`} />
+            <Crown size={10} className={`transition-transform duration-300 ${lpPulseType === 'up' ? 'scale-125 text-yellow-300 animate-pulse' : lpPulseType === 'down' ? 'scale-75 text-red-400' : 'text-amber-500'}`} />
             <span 
               className={`font-mono font-black transition-colors duration-300 ${lpPulseType === 'up' ? 'text-yellow-300 font-black' : lpPulseType === 'down' ? 'text-red-400' : 'text-white'}`}
             >
               {legacyPoints}
             </span>
-            <span className="text-[7.5px] text-yellow-500/60 uppercase font-mono tracking-wider hidden sm:inline-block ml-0.5">LP</span>
+            <span className="text-[7.5px] text-yellow-500/60 uppercase font-mono tracking-wider hidden md:inline-block ml-0.5">LP</span>
           </motion.button>
 
           <motion.button 
@@ -2846,31 +2846,37 @@ export default function HomeView() {
               backgroundColor: staminaPulseType === 'up' ? 'rgba(163, 230, 53, 0.35)' : staminaPulseType === 'down' ? 'rgba(239, 68, 68, 0.25)' : (activeResourceTooltip === 'stamina' ? 'rgba(63, 98, 18, 0.4)' : 'rgba(63, 98, 18, 0.15)'),
             }}
             transition={{ type: "spring", stiffness: 300, damping: 15 }}
-            className={`flex items-center gap-1 px-2 py-1 rounded cursor-help border transition-all duration-300 mr-1 ${
+            className={`flex items-center gap-0.5 px-1.5 py-0.5 sm:px-2 sm:py-1 rounded cursor-help border transition-all duration-300 mr-1 ${
               activeResourceTooltip === 'stamina' 
                 ? 'shadow-[0_0_15px_rgba(163,230,53,0.6)]' 
                 : 'shadow-[0_0_8px_rgba(163,230,53,0.15)]'
             }`}
             title="Click to learn about Stamina"
           >
-            <BatteryCharging size={11} className={`transition-transform duration-300 ${staminaPulseType === 'up' ? 'scale-125 text-lime-300 animate-pulse' : staminaPulseType === 'down' ? 'scale-75 text-red-400' : 'text-lime-500'}`} />
+            <BatteryCharging size={10} className={`transition-transform duration-300 ${staminaPulseType === 'up' ? 'scale-125 text-lime-300 animate-pulse' : staminaPulseType === 'down' ? 'scale-75 text-red-400' : 'text-lime-500'}`} />
             <span 
               className={`font-mono font-black transition-colors duration-300 ${staminaPulseType === 'up' ? 'text-lime-300 font-black' : staminaPulseType === 'down' ? 'text-red-400' : 'text-white'}`}
             >
               {Math.round(stamina)}%
             </span>
-            <span className="text-[7.5px] text-lime-500/60 uppercase font-mono tracking-wider hidden sm:inline-block ml-0.5">STAMINA</span>
+            <span className="text-[7.5px] text-lime-500/60 uppercase font-mono tracking-wider hidden md:inline-block ml-0.5">Stamina</span>
           </motion.button>
 
           <button 
             onClick={() => {
-              setIsGamePaused(true);
-              setPauseMenuTab('inventory');
+              setIsGamePaused(p => !p);
+              if (!isGamePaused) {
+                setPauseMenuTab('inventory');
+              }
               startBackgroundSoundtrack();
             }}
-            className="p-1 px-2.5 bg-amber-600 hover:bg-yellow-400 text-black font-black font-sans uppercase rounded text-[9.5px] flex items-center gap-1 transition-all"
+            className={`p-1 py-0.5 sm:p-2 sm:py-1 rounded font-black font-mono uppercase text-[9px] sm:text-xs flex items-center gap-1.5 transition-all duration-300 border shadow-lg ${
+              isGamePaused 
+                ? 'bg-yellow-500 text-black border-yellow-400 shadow-[0_0_12px_rgba(234,179,8,0.5)]' 
+                : 'bg-amber-600 hover:bg-yellow-500 hover:text-black border-amber-500/30 hover:border-yellow-400'
+            }`}
           >
-            <span>BAG</span>
+            <span>🎒 BAG</span>
           </button>
         </div>
       </header>
@@ -3231,10 +3237,10 @@ export default function HomeView() {
 
       {/* 4. ACTIVE GAME INTERACTIVE VIEWPORT */}
       {screen === 'game' && (
-        <main className="flex-1 flex flex-col md:grid md:grid-cols-[1fr_320px] gap-4 p-3 sm:p-5 max-w-7xl w-full mx-auto relative z-10 animate-fadeIn">
+        <main className="flex-grow flex flex-col md:grid md:grid-cols-[1fr_360px] w-full h-[calc(100vh-64px)] overflow-hidden relative z-10 animate-fadeIn p-0 gap-0">
           
           {/* LEFT SIDE: CONTROLS, DENSE VIEWPORT, LOGS */}
-          <div className="flex-1 flex flex-col space-y-4 md:col-start-1 md:row-start-1 md:row-span-3">
+          <div className="flex-grow flex flex-col space-y-4 p-3 sm:p-4 md:p-6 md:col-start-1 md:row-start-1 md:row-span-3 overflow-y-auto min-h-0">
             
             {/* STAGE CONTAINER WITH COLLISION FEED AND PARTICLE CANVAS */}
             <div 
@@ -3837,11 +3843,11 @@ export default function HomeView() {
 
           </div>
 
-          {/* RIGHT SIDE: SELECTED TILE CONSOLE, CONSTRUTION SUITE, APPRENTICE LEDGERS */}
-          <div className="w-full md:w-[320px] flex flex-col space-y-4 md:col-start-2 md:row-start-1">
+          {/* RIGHT SIDEBAR: SIDE HUD WITH RADAR, INSPECTOR, & APPRENTICES */}
+          <div className="w-full md:w-[360px] md:h-full flex flex-col space-y-4 p-3 md:p-4 bg-[#09090c]/95 md:bg-zinc-950/90 border-t md:border-t-0 md:border-l border-yellow-500/20 overflow-y-auto scrollbar-none flex-shrink-0 z-20 md:col-start-2 md:row-start-1 md:row-span-3">
 
             {/* LIVE SATELLITE HUD RADAR MINI-MAP & CELL INSPECTOR (Collapsible) */}
-            <div className="bg-[#09090c]/95 border-2 border-yellow-500/30 rounded-xl overflow-hidden shadow-xl">
+            <div className="bg-zinc-950/80 border-2 border-yellow-500/30 rounded-xl overflow-hidden shadow-xl">
               <div 
                 className="p-3 bg-zinc-950/80 border-b border-yellow-500/20 flex justify-between items-center cursor-pointer select-none"
                 onClick={() => setIsMapConsoleCollapsed(!isMapConsoleCollapsed)}
@@ -3954,7 +3960,7 @@ export default function HomeView() {
             </div>
             
             {/* VIEWPORT CONSOLE SELECTIONS */}
-            <div id="inspector_ledger_panel" className="p-4 bg-[#09090c]/95 border-2 border-yellow-500/30 rounded-xl space-y-3 shadow-xl md:col-start-2 md:row-start-2">
+            <div id="inspector_ledger_panel" className="p-4 bg-zinc-950/80 border-2 border-yellow-500/30 rounded-xl space-y-3 shadow-xl">
               <div className="border-b border-yellow-500/20 pb-2 flex justify-between items-center">
                 <span className="text-xs font-black text-white font-mono uppercase">Plot Inspector</span>
                 <span className="text-[9.5px] font-mono text-gray-500 font-bold">GRID ACC: ({selectedX}, {selectedY})</span>
@@ -4392,7 +4398,7 @@ export default function HomeView() {
             </div>
 
             {/* DIGITAL LABOR MATRIX COMPANIONS (Collapsible) */}
-            <div id="apprentices_contracts_panel" className="bg-[#09090c]/95 border-2 border-yellow-500/30 rounded-xl overflow-hidden shadow-xl md:col-start-2 md:row-start-3">
+            <div id="apprentices_contracts_panel" className="bg-zinc-950/80 border-2 border-yellow-500/30 rounded-xl overflow-hidden shadow-xl">
               <div 
                 className="p-3 bg-zinc-950/80 border-b border-yellow-500/20 flex justify-between items-center cursor-pointer select-none"
                 onClick={() => setIsAutomationsCollapsed(!isAutomationsCollapsed)}
@@ -5377,15 +5383,16 @@ export default function HomeView() {
             )}
           </AnimatePresence>
 
-          {/* 6. CONSOLIDATED SYSTEM PAUSE BANNER */}
+          {/* 6. CONSOLIDATED SYSTEM PAUSE BANNER (COLLAPSIBLE SIDE BAG DRAWER) */}
           <AnimatePresence>
             {isGamePaused && (
-              <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 text-yellow-500 font-mono">
+              <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px] pointer-events-none md:bg-transparent md:backdrop-blur-none">
                 <motion.div 
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="bg-[#09090c] border-4 border-amber-600 max-w-4xl w-full h-[90vh] p-4 sm:p-5 rounded-2xl flex flex-col relative"
+                  initial={{ x: '100%' }}
+                  animate={{ x: 0 }}
+                  exit={{ x: '100%' }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                  className="fixed top-16 right-0 bottom-0 z-45 bg-[#09090c] border-l border-yellow-500/20 w-full sm:w-[420px] h-[calc(100vh-64px)] p-4 flex flex-col shadow-2xl text-yellow-500 font-mono pointer-events-auto border-t-0"
                 >
                   <div className="flex justify-between items-center border-b border-amber-600/30 pb-3 mb-4 select-none">
                     <div className="flex items-center gap-2">
@@ -5399,7 +5406,7 @@ export default function HomeView() {
                       onClick={() => setIsGamePaused(false)}
                       className="px-3 py-1.5 bg-yellow-500 text-black font-black text-[10px] rounded border border-yellow-300 transition-all uppercase"
                     >
-                      [RESUME ➔]
+                      [CLOSE ✕]
                     </button>
                   </div>
 
