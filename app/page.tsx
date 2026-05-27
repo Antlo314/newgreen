@@ -799,52 +799,7 @@ export default function HomeView() {
 
   // Safe Web Audio Synthesizer
   const playRetroTone = (type: 'strike' | 'success' | 'fail' | 'level', volumeMult = 1) => {
-    if (isMuted) return;
-    try {
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      const ctx = audioCtxRef.current;
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      const effectiveVol = masterVolume * volumeMult;
-
-      if (type === 'strike') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(140, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.15);
-        gain.gain.setValueAtTime(effectiveVol, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.15);
-      } else if (type === 'success') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(300, ctx.currentTime);
-        osc.frequency.setValueAtTime(450, ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(effectiveVol * 0.5, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.25);
-      } else if (type === 'level') {
-        playAchievementSfx();
-      } else {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(150, ctx.currentTime);
-        osc.frequency.linearRampToValueAtTime(80, ctx.currentTime + 0.2);
-        gain.gain.setValueAtTime(effectiveVol * 0.5, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.2);
-      }
-    } catch {
-      // Audio context failure guard
-    }
+    return; // Silenced completely - only background music plays
   };
 
   // --- RETRO CHIPTUNE MELODIES & SYNTH PLAYER ---
@@ -871,33 +826,7 @@ export default function HomeView() {
   ];
 
   const playMelodyNote = (freq: number, duration = 0.18, oscType: OscillatorType = 'triangle') => {
-    if (isMuted || freq === 0) return;
-    try {
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-      }
-      const ctx = audioCtxRef.current;
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-      const osc = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-
-      osc.type = oscType;
-      osc.frequency.setValueAtTime(freq, ctx.currentTime);
-
-      gainNode.gain.setValueAtTime(0, ctx.currentTime);
-      gainNode.gain.linearRampToValueAtTime(masterVolume * 0.18, ctx.currentTime + 0.015);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
-      osc.start();
-      osc.stop(ctx.currentTime + duration);
-    } catch {
-      // Guarded
-    }
+    return; // Silenced completely - only background music plays
   };
 
   useEffect(() => {
