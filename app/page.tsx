@@ -840,6 +840,7 @@ export default function HomeView() {
         gain.gain.setValueAtTime(effectiveVol * 0.5, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
         osc.start();
+        osc.stop(ctx.currentTime + 0.2);
       }
     } catch {
       // Audio context failure guard

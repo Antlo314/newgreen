@@ -139,10 +139,20 @@ export function useAudioPlayer(
 
   }, [currentTrackUrl, masterVolume, isMuted, hasInteracted]);
 
+  const achievementSfxRef = useRef<HTMLAudioElement | null>(null);
+
   const playAchievementSfx = () => {
     if (isMuted || typeof window === 'undefined') return;
+    try {
+      if (achievementSfxRef.current) {
+        achievementSfxRef.current.pause();
+        achievementSfxRef.current.src = '';
+      }
+    } catch (e) {}
+    
     const sfx = new window.Audio('/music/GreenWood Level Up_Achievement.m4a');
     sfx.volume = masterVolume * 0.8;
+    achievementSfxRef.current = sfx;
     sfx.play().catch(() => {});
   };
 
