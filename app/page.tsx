@@ -960,7 +960,9 @@ export default function HomeView() {
 
   // Ambient Looping Background Music & Fades
   let currentTrackUrl: string | null = null;
-  if (screen === 'splash' || screen === 'creator') {
+  if (chiptunePlaying && activeTrack !== 'none') {
+    currentTrackUrl = null;
+  } else if (screen === 'splash' || screen === 'creator') {
     currentTrackUrl = '/music/GreenWood Main Menu.m4a';
   } else if (screen === 'game') {
     if (activeNPC !== null || isLeaderboardOpen) {
@@ -3313,10 +3315,10 @@ export default function HomeView() {
 
       {/* 4. ACTIVE GAME INTERACTIVE VIEWPORT */}
       {screen === 'game' && (
-        <main className="flex-1 flex flex-col md:flex-row gap-4 p-3 sm:p-5 max-w-7xl w-full mx-auto relative z-10 animate-fadeIn">
+        <main className="flex-1 flex flex-col md:grid md:grid-cols-[1fr_320px] gap-4 p-3 sm:p-5 max-w-7xl w-full mx-auto relative z-10 animate-fadeIn">
           
           {/* LEFT SIDE: CONTROLS, DENSE VIEWPORT, LOGS */}
-          <div className="flex-1 flex flex-col space-y-4">
+          <div className="flex-1 flex flex-col space-y-4 md:col-start-1 md:row-start-1 md:row-span-3">
             
             {/* STAGE CONTAINER WITH COLLISION FEED AND PARTICLE CANVAS */}
             <div 
@@ -3920,7 +3922,7 @@ export default function HomeView() {
           </div>
 
           {/* RIGHT SIDE: SELECTED TILE CONSOLE, CONSTRUTION SUITE, APPRENTICE LEDGERS */}
-          <div className="w-full md:w-[320px] flex flex-col space-y-4">
+          <div className="w-full md:w-[320px] flex flex-col space-y-4 md:col-start-2 md:row-start-1">
 
             {/* LIVE SATELLITE HUD RADAR MINI-MAP & CELL INSPECTOR (Collapsible) */}
             <div className="bg-[#09090c]/95 border-2 border-yellow-500/30 rounded-xl overflow-hidden shadow-xl">
@@ -4036,7 +4038,7 @@ export default function HomeView() {
             </div>
             
             {/* VIEWPORT CONSOLE SELECTIONS */}
-            <div id="inspector_ledger_panel" className="p-4 bg-[#09090c]/95 border-2 border-yellow-500/30 rounded-xl space-y-3 shadow-xl">
+            <div id="inspector_ledger_panel" className="p-4 bg-[#09090c]/95 border-2 border-yellow-500/30 rounded-xl space-y-3 shadow-xl md:col-start-2 md:row-start-2">
               <div className="border-b border-yellow-500/20 pb-2 flex justify-between items-center">
                 <span className="text-xs font-black text-white font-mono uppercase">Plot Inspector</span>
                 <span className="text-[9.5px] font-mono text-gray-500 font-bold">GRID ACC: ({selectedX}, {selectedY})</span>
@@ -4474,7 +4476,7 @@ export default function HomeView() {
             </div>
 
             {/* DIGITAL LABOR MATRIX COMPANIONS (Collapsible) */}
-            <div id="apprentices_contracts_panel" className="bg-[#09090c]/95 border-2 border-yellow-500/30 rounded-xl overflow-hidden shadow-xl">
+            <div id="apprentices_contracts_panel" className="bg-[#09090c]/95 border-2 border-yellow-500/30 rounded-xl overflow-hidden shadow-xl md:col-start-2 md:row-start-3">
               <div 
                 className="p-3 bg-zinc-950/80 border-b border-yellow-500/20 flex justify-between items-center cursor-pointer select-none"
                 onClick={() => setIsAutomationsCollapsed(!isAutomationsCollapsed)}
