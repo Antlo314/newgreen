@@ -3846,7 +3846,7 @@ export default function HomeView() {
           </div>
 
           {/* RIGHT SIDEBAR: SIDE HUD WITH RADAR, INSPECTOR, & APPRENTICES */}
-          <div className={`w-full md:w-[360px] md:h-full flex flex-col space-y-4 p-3 md:p-4 bg-[#09090c]/95 md:bg-zinc-950/90 border-t md:border-t-0 md:border-l border-yellow-500/20 overflow-y-auto scrollbar-none flex-shrink-0 z-20 md:col-start-2 md:row-start-1 md:row-span-3 ${mobileActiveTab === 'radar' ? 'flex' : 'hidden md:flex'}`}>
+          <div className={`w-full md:w-[360px] md:h-full flex flex-col space-y-4 p-3 md:p-4 bg-[#09090c]/95 md:bg-zinc-950/90 border-t md:border-t-0 md:border-l border-yellow-500/20 overflow-y-auto scrollbar-none flex-grow md:flex-shrink-0 min-h-0 z-20 md:col-start-2 md:row-start-1 md:row-span-3 ${mobileActiveTab === 'radar' ? 'flex' : 'hidden md:flex'}`}>
 
             {/* LIVE SATELLITE HUD RADAR MINI-MAP & CELL INSPECTOR (Collapsible) */}
             <div className="bg-zinc-950/80 border-2 border-yellow-500/30 rounded-xl overflow-hidden shadow-xl">
