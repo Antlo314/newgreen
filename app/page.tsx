@@ -696,6 +696,7 @@ export default function HomeView() {
   const [isMapConsoleCollapsed, setIsMapConsoleCollapsed] = useState(true); // Default collapsed on mobile, expandable
   const [isAutomationsCollapsed, setIsAutomationsCollapsed] = useState(true);
   const [isLogsCollapsed, setIsLogsCollapsed] = useState(true);
+  const [mobileActiveTab, setMobileActiveTab] = useState<'play' | 'radar' | 'auto' | 'logs'>('play');
 
   // Automatically expand panels on larger desktop screens on mount
   useEffect(() => {
@@ -3240,7 +3241,7 @@ export default function HomeView() {
         <main className="flex-grow flex flex-col md:grid md:grid-cols-[1fr_360px] w-full h-[calc(100vh-64px)] overflow-hidden relative z-10 animate-fadeIn p-0 gap-0">
           
           {/* LEFT SIDE: CONTROLS, DENSE VIEWPORT, LOGS */}
-          <div className="flex-grow flex flex-col space-y-4 p-3 sm:p-4 md:p-6 md:col-start-1 md:row-start-1 md:row-span-3 overflow-y-auto min-h-0">
+          <div className={`flex-grow flex flex-col space-y-4 p-3 sm:p-4 md:p-6 md:col-start-1 md:row-start-1 md:row-span-3 overflow-y-auto min-h-0 ${mobileActiveTab === 'radar' ? 'hidden md:flex' : 'flex'}`}>
             
             {/* STAGE CONTAINER WITH COLLISION FEED AND PARTICLE CANVAS */}
             <div 
@@ -3249,6 +3250,7 @@ export default function HomeView() {
                 ${stamina <= 0 ? 'border-red-600 shadow-[0_0_25px_rgba(220,38,38,0.6)] animate-lowStaminaShake grayscale-100' : ''}
                 ${stamina > 0 && stamina <= 20 ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.25)] grayscale-30 animate-pulse' : ''}
                 ${stamina > 20 ? 'border-amber-500/40 shadow-2xl' : ''}
+                ${mobileActiveTab === 'play' ? 'flex' : 'hidden md:flex'}
               `}
               onTouchStart={(e) => {
                 if (e.touches ? e.touches.length > 0 : false) {
@@ -3783,7 +3785,7 @@ export default function HomeView() {
             </div>
 
             {/* RETRO D-PAD NAVIGATION FOR TOUCH MOBILE */}
-            <div id="navigation_controls_dpad" className="grid grid-cols-3 gap-2 max-w-[200px] mx-auto select-none md:hidden py-2">
+            <div id="navigation_controls_dpad" className={`grid grid-cols-3 gap-2 max-w-[200px] mx-auto select-none md:hidden py-2 ${mobileActiveTab === 'play' ? 'grid' : 'hidden'}`}>
               <div />
               <button 
                 onClick={() => attemptMove('N')} 
@@ -3821,7 +3823,7 @@ export default function HomeView() {
             </div>
 
             {/* DENSE SYSTEM AUDIT LOGS FOOTER */}
-            <div id="dense_ledger_tracker_logs" className="p-2 sm:p-3.5 bg-black/90 border border-yellow-500/20 rounded-xl space-y-1 font-mono text-[10px] sm:text-xs">
+            <div id="dense_ledger_tracker_logs" className={`p-2 sm:p-3.5 bg-black/90 border border-yellow-500/20 rounded-xl space-y-1 font-mono text-[10px] sm:text-xs ${mobileActiveTab === 'logs' ? 'block' : 'hidden md:block'}`}>
               <div 
                 className="flex justify-between items-center cursor-pointer select-none pb-1"
                 onClick={() => setIsLogsCollapsed(!isLogsCollapsed)}
@@ -3831,7 +3833,7 @@ export default function HomeView() {
                 </span>
                 <span className="text-yellow-500 text-[9px] sm:hidden">{isLogsCollapsed ? '▼ EXPAND' : '▲ COLLAPSE'}</span>
               </div>
-              <div className={`space-y-1 mt-1 transition-all duration-300 overflow-y-auto scrollbar-none ${isLogsCollapsed ? 'max-h-0 sm:max-h-[95px] opacity-0 sm:opacity-100' : 'max-h-[95px] opacity-100'}`}>
+              <div className={`space-y-1 mt-1 transition-all duration-300 overflow-y-auto scrollbar-none ${(isLogsCollapsed && mobileActiveTab !== 'logs') ? 'max-h-0 md:max-h-[250px] opacity-0 md:opacity-100' : 'max-h-[250px] opacity-100'}`}>
                 {gameSystemLogs.map((log, lidx) => (
                   <p key={lidx} className="text-gray-300 leading-normal flex items-start gap-1">
                     <span className="text-yellow-500 leading-none">➔</span>
@@ -3844,7 +3846,7 @@ export default function HomeView() {
           </div>
 
           {/* RIGHT SIDEBAR: SIDE HUD WITH RADAR, INSPECTOR, & APPRENTICES */}
-          <div className="w-full md:w-[360px] md:h-full flex flex-col space-y-4 p-3 md:p-4 bg-[#09090c]/95 md:bg-zinc-950/90 border-t md:border-t-0 md:border-l border-yellow-500/20 overflow-y-auto scrollbar-none flex-shrink-0 z-20 md:col-start-2 md:row-start-1 md:row-span-3">
+          <div className={`w-full md:w-[360px] md:h-full flex flex-col space-y-4 p-3 md:p-4 bg-[#09090c]/95 md:bg-zinc-950/90 border-t md:border-t-0 md:border-l border-yellow-500/20 overflow-y-auto scrollbar-none flex-shrink-0 z-20 md:col-start-2 md:row-start-1 md:row-span-3 ${mobileActiveTab === 'radar' ? 'flex' : 'hidden md:flex'}`}>
 
             {/* LIVE SATELLITE HUD RADAR MINI-MAP & CELL INSPECTOR (Collapsible) */}
             <div className="bg-zinc-950/80 border-2 border-yellow-500/30 rounded-xl overflow-hidden shadow-xl">
@@ -3857,7 +3859,7 @@ export default function HomeView() {
                 </span>
                 <span className="text-yellow-500 text-[9px] md:hidden">{isMapConsoleCollapsed ? '▼ EXPAND' : '▲ COLLAPSE'}</span>
               </div>
-              <div className={`p-3 space-y-4 transition-all duration-300 ${isMapConsoleCollapsed ? 'max-h-0 md:max-h-[9999px] opacity-0 md:opacity-100 overflow-hidden' : 'max-h-[9999px] opacity-100'}`}>
+              <div className={`p-3 space-y-4 transition-all duration-300 ${(isMapConsoleCollapsed && mobileActiveTab !== 'radar') ? 'max-h-0 md:max-h-[9999px] opacity-0 md:opacity-100 overflow-hidden' : 'max-h-[9999px] opacity-100'}`}>
                 <MiniMap
                   mapGrid={mapGrid}
                   playerX={playerX}
@@ -4398,7 +4400,7 @@ export default function HomeView() {
             </div>
 
             {/* DIGITAL LABOR MATRIX COMPANIONS (Collapsible) */}
-            <div id="apprentices_contracts_panel" className="bg-zinc-950/80 border-2 border-yellow-500/30 rounded-xl overflow-hidden shadow-xl">
+            <div id="apprentices_contracts_panel" className={`bg-zinc-950/80 border-2 border-yellow-500/30 rounded-xl overflow-hidden shadow-xl ${mobileActiveTab === 'auto' ? 'block' : 'hidden md:block'}`}>
               <div 
                 className="p-3 bg-zinc-950/80 border-b border-yellow-500/20 flex justify-between items-center cursor-pointer select-none"
                 onClick={() => setIsAutomationsCollapsed(!isAutomationsCollapsed)}
@@ -4408,7 +4410,7 @@ export default function HomeView() {
                 </span>
                 <span className="text-yellow-500 text-[9px] md:hidden">{isAutomationsCollapsed ? '▼ EXPAND' : '▲ COLLAPSE'}</span>
               </div>
-              <div className={`p-4 space-y-3 transition-all duration-300 ${isAutomationsCollapsed ? 'max-h-0 md:max-h-[9999px] opacity-0 md:opacity-100 overflow-hidden' : 'max-h-[9999px] opacity-100'}`}>
+              <div className={`p-4 space-y-3 transition-all duration-300 ${(isAutomationsCollapsed && mobileActiveTab !== 'auto') ? 'max-h-0 md:max-h-[9999px] opacity-0 md:opacity-100 overflow-hidden' : 'max-h-[9999px] opacity-100'}`}>
                 <div className="border-b border-white/5 pb-2">
                   <span className="text-[10px] font-black text-yellow-405 font-mono uppercase block">Apprentice Automation Ledger</span>
                   <span className="text-[8.5px] text-gray-400 block mt-1 leading-normal">
@@ -6271,6 +6273,66 @@ export default function HomeView() {
               </motion.div>
             )}
           </AnimatePresence>
+          
+          {/* MOBILE BOTTOM NAVIGATION BAR */}
+          <div className="md:hidden flex justify-around items-center bg-zinc-950 border-t border-yellow-500/20 h-16 w-full shrink-0 z-30 select-none px-2 py-1 gap-1">
+            <button
+              onClick={() => {
+                setMobileActiveTab('play');
+                playRetroTone('success', 0.4);
+              }}
+              className={`flex-1 flex flex-col items-center justify-center h-full rounded transition-all active:scale-95 border ${
+                mobileActiveTab === 'play'
+                  ? 'bg-yellow-500/10 border-yellow-500 text-yellow-400 font-extrabold'
+                  : 'bg-transparent border-transparent text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              <span className="text-base">🎮</span>
+              <span className="text-[9px] font-mono tracking-wider">PLAY</span>
+            </button>
+            <button
+              onClick={() => {
+                setMobileActiveTab('radar');
+                playRetroTone('success', 0.4);
+              }}
+              className={`flex-1 flex flex-col items-center justify-center h-full rounded transition-all active:scale-95 border ${
+                mobileActiveTab === 'radar'
+                  ? 'bg-yellow-500/10 border-yellow-500 text-yellow-400 font-extrabold'
+                  : 'bg-transparent border-transparent text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              <span className="text-base">🗺️</span>
+              <span className="text-[9px] font-mono tracking-wider">RADAR</span>
+            </button>
+            <button
+              onClick={() => {
+                setMobileActiveTab('auto');
+                playRetroTone('success', 0.4);
+              }}
+              className={`flex-1 flex flex-col items-center justify-center h-full rounded transition-all active:scale-95 border ${
+                mobileActiveTab === 'auto'
+                  ? 'bg-yellow-500/10 border-yellow-500 text-yellow-400 font-extrabold'
+                  : 'bg-transparent border-transparent text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              <span className="text-base">🤖</span>
+              <span className="text-[9px] font-mono tracking-wider">AUTO</span>
+            </button>
+            <button
+              onClick={() => {
+                setMobileActiveTab('logs');
+                playRetroTone('success', 0.4);
+              }}
+              className={`flex-1 flex flex-col items-center justify-center h-full rounded transition-all active:scale-95 border ${
+                mobileActiveTab === 'logs'
+                  ? 'bg-yellow-500/10 border-yellow-500 text-yellow-400 font-extrabold'
+                  : 'bg-transparent border-transparent text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              <span className="text-base">📟</span>
+              <span className="text-[9px] font-mono tracking-wider">LOGS</span>
+            </button>
+          </div>
 
         </main>
       )}
