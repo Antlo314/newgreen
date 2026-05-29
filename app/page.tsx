@@ -3246,7 +3246,7 @@ export default function HomeView() {
             {/* STAGE CONTAINER WITH COLLISION FEED AND PARTICLE CANVAS */}
             <div 
               id="cooperative_crt_viewport" 
-              className={`relative border-4 rounded-2xl bg-zinc-950 overflow-hidden shadow-2xl p-1.5 select-none aspect-square max-w-[550px] mx-auto w-full flex items-center justify-center transition-all duration-300 touch-none
+              className={`relative border-4 rounded-2xl bg-zinc-950 overflow-hidden shadow-2xl p-1.5 select-none aspect-square max-w-[550px] mx-auto w-full flex items-center justify-center transition-all duration-300 touch-none shrink-0
                 ${stamina <= 0 ? 'border-red-600 shadow-[0_0_25px_rgba(220,38,38,0.6)] animate-lowStaminaShake grayscale-100' : ''}
                 ${stamina > 0 && stamina <= 20 ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.25)] grayscale-30 animate-pulse' : ''}
                 ${stamina > 20 ? 'border-amber-500/40 shadow-2xl' : ''}
@@ -3379,7 +3379,7 @@ export default function HomeView() {
               })()}
 
               {/* Map viewport coordinate grid (11x11 viewport) */}
-              <div className="w-full h-full grid grid-cols-11 grid-rows-11 gap-0.5 aspect-square relative bg-zinc-950">
+              <div className="w-full h-full grid grid-cols-11 grid-rows-11 gap-0.5 aspect-square relative bg-zinc-950 shrink-0">
                 {viewportTiles.map(tile => {
                   const isPlayerHere = tile.x === playerX && tile.y === playerY;
                   const isSelected = tile.x === selectedX && tile.y === selectedY;
