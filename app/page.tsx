@@ -2695,14 +2695,14 @@ export default function HomeView() {
           <div className="h-9 w-9 bg-gradient-to-br from-[#22c55e] to-emerald-800 rounded-lg flex items-center justify-center border-2 border-emerald-400 font-extrabold text-black text-lg animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.3)] flex-shrink-0">
             G
           </div>
-          <div className="min-w-0">
-            <h1 className="text-xs sm:text-sm font-black text-white hover:text-emerald-400 font-mono tracking-widest uppercase truncate leading-none">NEW GREENWOOD</h1>
-            <div className="text-[8px] sm:text-[9px] text-gray-405 mt-1 flex items-center gap-2 font-sans select-none truncate">
-              <span className="flex items-center gap-1">
+          <div className="min-w-0 flex items-center gap-1.5">
+            <h1 className="text-xs sm:text-sm font-black text-white hover:text-emerald-400 font-mono tracking-widest uppercase truncate leading-none hidden sm:block">NEW GREENWOOD</h1>
+            <div className="text-[8px] sm:text-[9px] text-gray-405 flex items-center gap-1.5 font-sans select-none truncate">
+              <span className="hidden sm:inline-flex items-center gap-1">
                 <span>GROWTH:</span> 
                 <span className="text-yellow-500 font-bold font-mono">{(Math.pow(1.5, cottagesCount)).toFixed(2)}x</span>
               </span>
-              <span className="text-zinc-700">|</span>
+              <span className="text-zinc-700 hidden sm:inline">|</span>
               <button 
                 onMouseEnter={() => setActiveResourceTooltip('weather')}
                 onMouseLeave={() => setActiveResourceTooltip(null)}
@@ -2714,14 +2714,14 @@ export default function HomeView() {
                 {weather === 'rainy' && "🌧 RAIN"}
                 {weather === 'foggy' && "🌫 FOG"}
                 {weather === 'sunset_glow' && "🌇 SUNSET"}
-                <span className="opacity-60 ml-0.5">({weatherTimer}s)</span>
+                <span className="opacity-60 ml-0.5 hidden sm:inline">({weatherTimer}s)</span>
               </button>
-              <span className="text-zinc-700">|</span>
+              <span className="text-zinc-700 hidden sm:inline">|</span>
               <button 
                 onMouseEnter={() => setActiveResourceTooltip('heritage')}
                 onMouseLeave={() => setActiveResourceTooltip(null)}
                 onClick={() => setActiveResourceTooltip(activeResourceTooltip === 'heritage' ? null : 'heritage')}
-                className={`flex items-center gap-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold text-white shadow-inner cursor-help transition-all transform hover:scale-105 active:scale-95 ${activeResourceTooltip === 'heritage' ? 'ring-1 ring-pink-400 border-pink-500 bg-pink-950/40' : ''}`}
+                className={`hidden sm:flex items-center gap-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-1.5 py-0.5 rounded text-[8px] font-mono font-bold text-white shadow-inner cursor-help transition-all transform hover:scale-105 active:scale-95 ${activeResourceTooltip === 'heritage' ? 'ring-1 ring-pink-400 border-pink-500 bg-pink-950/40' : ''}`}
                 title="Click/Hover to see Pioneer Identity & Perks info cue"
               >
                 👤 ID PROFILE
@@ -2739,7 +2739,7 @@ export default function HomeView() {
             onClick={() => setActiveResourceTooltip(activeResourceTooltip === 'time' ? null : 'time')}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className={`flex items-center gap-0.5 bg-zinc-900 border px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-white font-mono font-bold shadow-inner cursor-help transition-all duration-300 ${
+            className={`hidden sm:flex items-center gap-0.5 bg-zinc-900 border px-1.5 py-0.5 sm:px-2 sm:py-1 rounded text-white font-mono font-bold shadow-inner cursor-help transition-all duration-300 ${
               activeResourceTooltip === 'time' 
                 ? 'border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.6)]' 
                 : 'border-yellow-500/35 shadow-[0_0_8px_rgba(250,204,21,0.15)]'
@@ -2776,7 +2776,7 @@ export default function HomeView() {
             >
               {bswx.toFixed(1)}
             </span>
-            <span className="text-[7.5px] text-yellow-500/60 uppercase font-mono tracking-wider hidden md:inline-block ml-0.5">Coins</span>
+            <span className="text-[7.5px] text-yellow-500/60 uppercase font-mono tracking-wider hidden sm:inline-block ml-0.5">Coins</span>
           </motion.button>
 
           <motion.button 
@@ -2804,7 +2804,7 @@ export default function HomeView() {
             >
               {reputation}
             </span>
-            <span className="text-[7.5px] text-emerald-500/60 uppercase font-mono tracking-wider hidden md:inline-block ml-0.5">Rep</span>
+            <span className="text-[7.5px] text-emerald-500/60 uppercase font-mono tracking-wider hidden sm:inline-block ml-0.5">Rep</span>
           </motion.button>
 
           <motion.button 
@@ -2832,7 +2832,7 @@ export default function HomeView() {
             >
               {legacyPoints}
             </span>
-            <span className="text-[7.5px] text-yellow-500/60 uppercase font-mono tracking-wider hidden md:inline-block ml-0.5">LP</span>
+            <span className="text-[7.5px] text-yellow-500/60 uppercase font-mono tracking-wider hidden sm:inline-block ml-0.5">LP</span>
           </motion.button>
 
           <motion.button 
@@ -2860,7 +2860,7 @@ export default function HomeView() {
             >
               {Math.round(stamina)}%
             </span>
-            <span className="text-[7.5px] text-lime-500/60 uppercase font-mono tracking-wider hidden md:inline-block ml-0.5">Stamina</span>
+            <span className="text-[7.5px] text-lime-500/60 uppercase font-mono tracking-wider hidden sm:inline-block ml-0.5">Stamina</span>
           </motion.button>
 
           <button 
@@ -2877,7 +2877,7 @@ export default function HomeView() {
                 : 'bg-amber-600 hover:bg-yellow-500 hover:text-black border-amber-500/30 hover:border-yellow-400'
             }`}
           >
-            <span>🎒 BAG</span>
+            <span>🎒 <span className="hidden sm:inline">BAG</span></span>
           </button>
         </div>
       </header>
@@ -5894,7 +5894,7 @@ export default function HomeView() {
                 >
                   <div className="flex justify-between items-center mb-4 pb-2 border-b border-white/10">
                     <span className="text-[10px] font-mono text-yellow-500 uppercase tracking-widest font-black">
-                      🎓 Greenwood Walkthrough ({tutorialStep + 1} / 7)
+                      🎓 Greenwood Walkthrough ({tutorialStep + 1} / 10)
                     </span>
                     <button 
                       onClick={() => setShowTutorial(false)}
@@ -6013,6 +6013,51 @@ export default function HomeView() {
                       </div>
                     )}
 
+                    {tutorialStep === 7 && (
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2 font-mono text-yellow-500">
+                          <span>🏦 Co-op Bank Reserves & Financial Security</span>
+                        </h3>
+                        <p className="text-[11px] text-gray-300 leading-relaxed font-sans">
+                          Realize O.W. Gurley's vision of financial self-reliance. Your money and cooperative investments are backed by local community trust:
+                        </p>
+                        <div className="p-2.5 bg-zinc-950 rounded border border-white/5 space-y-2 text-[9.5px] font-mono text-gray-400">
+                          <p><strong className="text-yellow-500">🏛️ Central Square Hub:</strong> Walk to the Central Greenwood Civic Trust Center coordinates to view your cooperative ledger accounts and comparisons.</p>
+                          <p><strong className="text-emerald-400">💵 Global Reserves:</strong> Every built business adds to collective town funds, increasing the security rating of your community accounts.</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {tutorialStep === 8 && (
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2 font-mono text-yellow-500">
+                          <span>🏛️ Restoring Historic Landmarks</span>
+                        </h3>
+                        <p className="text-[11px] text-gray-300 leading-relaxed font-sans">
+                          Historic landmarks around the map stand as sacred proof of sovereign success. Restore them to unlock their wisdom:
+                        </p>
+                        <div className="p-2.5 bg-zinc-950 rounded border border-white/5 space-y-2 text-[9.5px] font-mono text-gray-400">
+                          <p><strong className="text-yellow-500">🗺️ Monument Locations:</strong> Find Mount Zion Baptist, Vernon A.M.E., and the Stradford Hotel around the boundaries of the coordinates grid.</p>
+                          <p><strong className="text-purple-400">🔮 Rebuilding LP:</strong> Restore ruined structures to gain large boosts in Reputation and Legacy Points, unlocking specialized upgrades.</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {tutorialStep === 9 && (
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2 font-mono text-yellow-500">
+                          <span>🏘️ Cottages & Community Synergy</span>
+                        </h3>
+                        <p className="text-[11px] text-gray-300 leading-relaxed font-sans">
+                          Sovereignty is built through thoughtful urban design. Adjacent structures boost each other:
+                        </p>
+                        <div className="p-2.5 bg-zinc-950 rounded border border-white/5 space-y-2 text-[9.5px] font-mono text-gray-400">
+                          <p><strong className="text-teal-400">🏡 Pioneer Cottages:</strong> Build cottages on selected residential plots. Each cottage compounds the output of all shops globally by 1.5x.</p>
+                          <p><strong className="text-lime-400">🌻 Community Gardens:</strong> Plant gardens next to built storefronts to passively multiply adjacent Reputation yields by +50%.</p>
+                        </div>
+                      </div>
+                    )}
+
                   </div>
 
                   <div className="flex justify-between items-center mt-6 pt-4 border-t border-white/10">
@@ -6023,7 +6068,7 @@ export default function HomeView() {
                     >
                       Back
                     </button>
-                    {tutorialStep < 6 ? (
+                    {tutorialStep < 9 ? (
                       <button
                         onClick={() => setTutorialStep(prev => prev + 1)}
                         className="px-5 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-black rounded text-xs font-bold select-none"
