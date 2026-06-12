@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef } from 'react';
-import { useFrame, ThreeEvent } from '@react-three/fiber';
+import { useFrame, useLoader, ThreeEvent } from '@react-three/fiber';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import { useGame } from '../../src/game/store';
 import { audio } from '../../src/game/audio';
@@ -152,50 +153,130 @@ function River() {
 }
 
 // ---------------------------------------------------------------------------
-// Resource nodes — instanced trees, rocks, clay mounds (+ depleted variants)
+// GLB instancing helpers — Kenney models flattened to baked geometry parts so
+// every model variant stays a handful of instanced draw calls.
+// ---------------------------------------------------------------------------
+
+interface ModelPart {
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+}
+
+/** Extract baked, ground-centered, size-normalized geometry parts from a GLB. */
+function useModelParts(url: string, targetSize: number, fit: 'height' | 'width' = 'height'): ModelPart[] {
+  const { scene } = useLoader(GLTFLoader, url);
+  return useMemo(() => {
+    scene.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const measure = fit === 'height' ? size.y : Math.max(size.x, size.z);
+    const k = targetSize / Math.max(0.0001, measure);
+    const cx = (box.min.x + box.max.x) / 2;
+    const cz = (box.min.z + box.max.z) / 2;
+    const parts: ModelPart[] = [];
+    scene.traverse((o: THREE.Object3D) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const g = m.geometry.clone();
+      g.applyMatrix4(m.matrixWorld);
+      g.translate(-cx, -box.min.y, -cz);
+      g.scale(k, k, k);
+      parts.push({ geometry: g, material: m.material as THREE.Material });
+    });
+    return parts;
+  }, [scene, targetSize, fit]);
+}
+
+const MAXI = 200;
+
+/** One instancedMesh per geometry part, all driven by the same matrix list. */
+function InstancedParts({
+  parts,
+  matrices,
+  castShadow = false,
+}: {
+  parts: ModelPart[];
+  matrices: THREE.Matrix4[];
+  castShadow?: boolean;
+}) {
+  return (
+    <>
+      {parts.map((p, i) => (
+        <PartInstances key={i} part={p} matrices={matrices} castShadow={castShadow} />
+      ))}
+    </>
+  );
+}
+
+function PartInstances({
+  part,
+  matrices,
+  castShadow,
+}: {
+  part: ModelPart;
+  matrices: THREE.Matrix4[];
+  castShadow: boolean;
+}) {
+  const ref = useRef<THREE.InstancedMesh>(null);
+  useEffect(() => {
+    const m = ref.current;
+    if (!m) return;
+    for (let i = 0; i < matrices.length; i++) m.setMatrixAt(i, matrices[i]);
+    m.count = matrices.length;
+    m.instanceMatrix.needsUpdate = true;
+  }, [matrices]);
+  return (
+    <instancedMesh
+      ref={ref}
+      args={[part.geometry, part.material, MAXI]}
+      castShadow={castShadow}
+      frustumCulled={false}
+    />
+  );
+}
+
+// matrix pool reused across recomputes to avoid per-frame allocation during regrowth
+const matrixPool: THREE.Matrix4[] = [];
+let poolCursor = 0;
+const tmpQuat = new THREE.Quaternion();
+const tmpEuler = new THREE.Euler();
+const tmpPos = new THREE.Vector3();
+const tmpScale = new THREE.Vector3();
+
+function poolMatrix(x: number, y: number, z: number, rotY: number, sx: number, sy: number, sz: number) {
+  const m = (matrixPool[poolCursor] ??= new THREE.Matrix4());
+  poolCursor++;
+  tmpPos.set(x, y, z);
+  tmpQuat.setFromEuler(tmpEuler.set(0, rotY, 0));
+  tmpScale.set(sx, sy, sz);
+  return m.compose(tmpPos, tmpQuat, tmpScale);
+}
+
+// ---------------------------------------------------------------------------
+// Resource nodes — instanced Kenney trees, rocks, stumps (+ depleted variants)
 // ---------------------------------------------------------------------------
 
 function ResourceNodes() {
-  const trunks = useRef<THREE.InstancedMesh>(null);
-  const foliage = useRef<THREE.InstancedMesh>(null);
-  const foliageTop = useRef<THREE.InstancedMesh>(null);
-  const stumps = useRef<THREE.InstancedMesh>(null);
-  const rocks = useRef<THREE.InstancedMesh>(null);
-  const rubble = useRef<THREE.InstancedMesh>(null);
-  const clayMounds = useRef<THREE.InstancedMesh>(null);
-  const clayDug = useRef<THREE.InstancedMesh>(null);
+  const oakParts = useModelParts('/models/nature/tree_oak.glb', 4.1);
+  const treeParts = useModelParts('/models/nature/tree_default.glb', 3.5);
+  const stumpParts = useModelParts('/models/nature/stump_roundDetailed.glb', 0.5);
+  const rockParts = useModelParts('/models/nature/stone_largeA.glb', 1.7, 'width');
+  const rubbleParts = useModelParts('/models/nature/stone_smallFlatA.glb', 1.2, 'width');
 
   const nodesVersion = useGame((s) => s.nodesVersion);
-  const MAXI = 200;
 
-  // geometries translated so each model's base sits at y=0 of its instance
-  const trunkGeo = useMemo(() => {
-    const g = new THREE.CylinderGeometry(0.22, 0.3, 1.6, 6);
-    g.translate(0, 0.8, 0);
-    return g;
-  }, []);
-  const foliageGeo = useMemo(() => {
-    const g = new THREE.ConeGeometry(1.35, 2.2, 7);
-    g.translate(0, 2.2, 0);
-    return g;
-  }, []);
-  const foliageTopGeo = useMemo(() => {
-    const g = new THREE.ConeGeometry(0.85, 1.6, 7);
-    g.translate(0, 3.3, 0);
-    return g;
-  }, []);
-  const stumpGeo = useMemo(() => {
-    const g = new THREE.CylinderGeometry(0.26, 0.32, 0.4, 6);
-    g.translate(0, 0.2, 0);
-    return g;
-  }, []);
-
-  useEffect(() => {
+  const sets = useMemo(() => {
+    void nodesVersion;
+    poolCursor = 0;
     const nodes = useGame.getState().nodes;
-    const refs = [trunks, foliage, foliageTop, stumps, rocks, rubble, clayMounds, clayDug];
-    if (refs.some((r) => !r.current)) return;
-
-    let iTree = 0, iStump = 0, iRock = 0, iRubble = 0, iClay = 0, iDug = 0;
+    const oaks: THREE.Matrix4[] = [];
+    const trees: THREE.Matrix4[] = [];
+    const stumps: THREE.Matrix4[] = [];
+    const rocks: THREE.Matrix4[] = [];
+    const rubble: THREE.Matrix4[] = [];
+    const clay: THREE.Matrix4[] = [];
+    const dug: THREE.Matrix4[] = [];
 
     for (const n of nodes) {
       const alive = n.hp > 0;
@@ -203,95 +284,74 @@ function ResourceNodes() {
       const rot = n.seed * Math.PI * 2;
       if (n.type === 'wood') {
         if (alive) {
-          const hpK = 0.7 + (n.hp / n.maxHp) * 0.3;
-          tmpObj.position.set(n.x, 0, n.z);
-          tmpObj.rotation.set(0, rot, 0);
-          tmpObj.scale.setScalar(scaleK * hpK);
-          tmpObj.updateMatrix();
-          trunks.current!.setMatrixAt(iTree, tmpObj.matrix);
-          foliage.current!.setMatrixAt(iTree, tmpObj.matrix);
-          foliageTop.current!.setMatrixAt(iTree, tmpObj.matrix);
-          tmpColor.setHSL(0.33 + n.seed * 0.06, 0.45 + n.seed * 0.15, 0.28 + n.seed * 0.08);
-          foliage.current!.setColorAt(iTree, tmpColor);
-          foliageTop.current!.setColorAt(iTree, tmpColor.offsetHSL(0, 0, 0.05));
-          iTree++;
+          const s = scaleK * (0.7 + (n.hp / n.maxHp) * 0.3);
+          (n.seed > 0.5 ? oaks : trees).push(poolMatrix(n.x, 0, n.z, rot, s, s, s));
         } else {
-          tmpObj.position.set(n.x, 0, n.z);
-          tmpObj.rotation.set(0, rot, 0);
-          tmpObj.scale.setScalar(scaleK);
-          tmpObj.updateMatrix();
-          stumps.current!.setMatrixAt(iStump++, tmpObj.matrix);
+          stumps.push(poolMatrix(n.x, 0, n.z, rot, scaleK, scaleK, scaleK));
         }
       } else if (n.type === 'stone') {
-        tmpObj.position.set(n.x, alive ? 0.45 * scaleK : 0.12, n.z);
-        tmpObj.rotation.set(n.seed, rot, n.seed * 0.5);
-        tmpObj.scale.setScalar(alive ? scaleK * (0.7 + (n.hp / n.maxHp) * 0.3) : scaleK * 0.45);
-        tmpObj.updateMatrix();
-        if (alive) rocks.current!.setMatrixAt(iRock++, tmpObj.matrix);
-        else rubble.current!.setMatrixAt(iRubble++, tmpObj.matrix);
+        if (alive) {
+          const s = scaleK * (0.7 + (n.hp / n.maxHp) * 0.3);
+          rocks.push(poolMatrix(n.x, 0, n.z, rot, s, s, s));
+        } else {
+          rubble.push(poolMatrix(n.x, 0, n.z, rot, scaleK, scaleK, scaleK));
+        }
       } else {
-        tmpObj.position.set(n.x, alive ? 0.1 : 0.02, n.z);
-        tmpObj.rotation.set(0, rot, 0);
-        tmpObj.scale.set(scaleK, alive ? scaleK * 0.5 : 0.15, scaleK);
-        tmpObj.updateMatrix();
-        if (alive) clayMounds.current!.setMatrixAt(iClay++, tmpObj.matrix);
-        else clayDug.current!.setMatrixAt(iDug++, tmpObj.matrix);
+        if (alive) clay.push(poolMatrix(n.x, 0.1, n.z, rot, scaleK, scaleK * 0.5, scaleK));
+        else dug.push(poolMatrix(n.x, 0.02, n.z, rot, scaleK, 0.15, scaleK));
       }
     }
-
-    trunks.current!.count = iTree;
-    foliage.current!.count = iTree;
-    foliageTop.current!.count = iTree;
-    stumps.current!.count = iStump;
-    rocks.current!.count = iRock;
-    rubble.current!.count = iRubble;
-    clayMounds.current!.count = iClay;
-    clayDug.current!.count = iDug;
-
-    for (const r of refs) {
-      r.current!.instanceMatrix.needsUpdate = true;
-      if (r.current!.instanceColor) r.current!.instanceColor.needsUpdate = true;
-    }
+    return { oaks, trees, stumps, rocks, rubble, clay, dug };
   }, [nodesVersion]);
 
   return (
     <group>
-      {/* tree trunks */}
-      <instancedMesh ref={trunks} args={[undefined, undefined, MAXI]} geometry={trunkGeo} castShadow frustumCulled={false}>
-        <meshStandardMaterial color="#6b4226" roughness={0.95} />
-      </instancedMesh>
-      {/* foliage cones */}
-      <instancedMesh ref={foliage} args={[undefined, undefined, MAXI]} geometry={foliageGeo} castShadow frustumCulled={false}>
-        <meshStandardMaterial roughness={0.9} color="#ffffff" />
-      </instancedMesh>
-      <instancedMesh ref={foliageTop} args={[undefined, undefined, MAXI]} geometry={foliageTopGeo} castShadow frustumCulled={false}>
-        <meshStandardMaterial roughness={0.9} color="#ffffff" />
-      </instancedMesh>
-      {/* stumps */}
-      <instancedMesh ref={stumps} args={[undefined, undefined, MAXI]} geometry={stumpGeo} castShadow frustumCulled={false}>
-        <meshStandardMaterial color="#7d5a3a" roughness={1} />
-      </instancedMesh>
-      {/* rocks */}
-      <instancedMesh ref={rocks} args={[undefined, undefined, MAXI]} castShadow frustumCulled={false}>
-        <dodecahedronGeometry args={[0.75, 0]} />
-        <meshStandardMaterial color="#8d8d94" roughness={0.85} />
-      </instancedMesh>
-      <instancedMesh ref={rubble} args={[undefined, undefined, MAXI]} frustumCulled={false}>
-        <dodecahedronGeometry args={[0.75, 0]} />
-        <meshStandardMaterial color="#6f6f76" roughness={1} />
-      </instancedMesh>
-      {/* clay mounds */}
-      <instancedMesh ref={clayMounds} args={[undefined, undefined, MAXI]} castShadow frustumCulled={false}>
+      <InstancedParts parts={oakParts} matrices={sets.oaks} castShadow />
+      <InstancedParts parts={treeParts} matrices={sets.trees} castShadow />
+      <InstancedParts parts={stumpParts} matrices={sets.stumps} />
+      <InstancedParts parts={rockParts} matrices={sets.rocks} castShadow />
+      <InstancedParts parts={rubbleParts} matrices={sets.rubble} />
+      {/* clay mounds stay procedural — they read as dug earth */}
+      <ClayMounds matrices={sets.clay} dugMatrices={sets.dug} />
+    </group>
+  );
+}
+
+function ClayMounds({ matrices, dugMatrices }: { matrices: THREE.Matrix4[]; dugMatrices: THREE.Matrix4[] }) {
+  const mounds = useRef<THREE.InstancedMesh>(null);
+  const dug = useRef<THREE.InstancedMesh>(null);
+  useEffect(() => {
+    if (mounds.current) {
+      matrices.forEach((m, i) => mounds.current!.setMatrixAt(i, m));
+      mounds.current.count = matrices.length;
+      mounds.current.instanceMatrix.needsUpdate = true;
+    }
+    if (dug.current) {
+      dugMatrices.forEach((m, i) => dug.current!.setMatrixAt(i, m));
+      dug.current.count = dugMatrices.length;
+      dug.current.instanceMatrix.needsUpdate = true;
+    }
+  }, [matrices, dugMatrices]);
+  return (
+    <group>
+      <instancedMesh ref={mounds} args={[undefined, undefined, MAXI]} castShadow frustumCulled={false}>
         <sphereGeometry args={[0.8, 10, 7]} />
         <meshStandardMaterial color="#b35c3a" roughness={0.95} />
       </instancedMesh>
-      <instancedMesh ref={clayDug} args={[undefined, undefined, MAXI]} frustumCulled={false}>
+      <instancedMesh ref={dug} args={[undefined, undefined, MAXI]} frustumCulled={false}>
         <sphereGeometry args={[0.8, 8, 6]} />
         <meshStandardMaterial color="#7e4128" roughness={1} />
       </instancedMesh>
     </group>
   );
 }
+
+useLoader.preload(GLTFLoader, '/models/nature/tree_oak.glb');
+useLoader.preload(GLTFLoader, '/models/nature/tree_default.glb');
+useLoader.preload(GLTFLoader, '/models/nature/stump_roundDetailed.glb');
+useLoader.preload(GLTFLoader, '/models/nature/stone_largeA.glb');
+useLoader.preload(GLTFLoader, '/models/nature/stone_smallFlatA.glb');
+useLoader.preload(GLTFLoader, '/models/nature/plant_bushDetailed.glb');
 
 // ---------------------------------------------------------------------------
 
@@ -302,6 +362,24 @@ function Decorations() {
   const tufts = useMemo(generateGrassTufts, []);
   const blooms = useMemo(generateFlowers, []);
   const flowerColors = useMemo(() => ['#e8c33a', '#d96aa0', '#e9e4d4'].map((c) => new THREE.Color(c)), []);
+
+  // every 14th grass tuft hosts a Kenney bush for mid-size ground cover
+  const bushParts = useModelParts('/models/nature/plant_bushDetailed.glb', 0.72);
+  const bushMatrices = useMemo(
+    () =>
+      tufts
+        .filter((_, i) => i % 14 === 0)
+        .map((t, i) => {
+          const m = new THREE.Matrix4();
+          const s = 0.8 + t.s * 0.5;
+          tmpObj.position.set(t.x, 0, t.z);
+          tmpObj.rotation.set(0, t.s * 9 + i, 0);
+          tmpObj.scale.setScalar(s);
+          tmpObj.updateMatrix();
+          return m.copy(tmpObj.matrix);
+        }),
+    [tufts, bushParts]
+  );
 
   useEffect(() => {
     if (grass.current) {
@@ -343,6 +421,7 @@ function Decorations() {
         <sphereGeometry args={[0.09, 6, 5]} />
         <meshStandardMaterial color="#ffffff" roughness={0.7} />
       </instancedMesh>
+      <InstancedParts parts={bushParts} matrices={bushMatrices} castShadow />
     </group>
   );
 }

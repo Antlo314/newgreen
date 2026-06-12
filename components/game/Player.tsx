@@ -143,8 +143,8 @@ export default function Player() {
     if (speed > 0) {
       const nx = pos.x + tmpDir.x * speed * dt;
       const nz = pos.z + tmpDir.z * speed * dt;
-      if (!collides(nx, pos.z, s)) pos.x = nx;
-      if (!collides(pos.x, nz, s)) pos.z = nz;
+      if (!collides(nx, pos.z, s, pos.x, pos.z)) pos.x = nx;
+      if (!collides(pos.x, nz, s, pos.x, pos.z)) pos.z = nz;
 
       // facing
       const targetFacing = Math.atan2(tmpDir.x, tmpDir.z);
@@ -222,7 +222,23 @@ function HarvestRing() {
 
 type GS = ReturnType<typeof useGame.getState>;
 
-function collides(x: number, z: number, s: GS): boolean {
+/**
+ * Circle collider check with depenetration: if the player is already inside
+ * (e.g. a tree regrew underfoot), moves that increase distance are allowed so
+ * they can always walk out instead of being trapped.
+ */
+function circleBlocks(x: number, z: number, fx: number, fz: number, cx: number, cz: number, r: number): boolean {
+  const dx = x - cx;
+  const dz = z - cz;
+  const d2 = dx * dx + dz * dz;
+  if (d2 >= r * r) return false;
+  const fdx = fx - cx;
+  const fdz = fz - cz;
+  const fd2 = fdx * fdx + fdz * fdz;
+  return !(fd2 < r * r && d2 > fd2);
+}
+
+function collides(x: number, z: number, s: GS, fx: number, fz: number): boolean {
   // world bounds
   if (Math.abs(x) > WORLD_HALF - 1 || Math.abs(z) > WORLD_HALF - 1) return true;
   // river (bridge passable, slightly wider check for player radius)
@@ -234,29 +250,30 @@ function collides(x: number, z: number, s: GS): boolean {
   }
   // static colliders
   for (const c of STATIC_COLLIDERS) {
-    const dx = x - c.x;
-    const dz = z - c.z;
-    if (dx * dx + dz * dz < (c.r + PLAYER_R) * (c.r + PLAYER_R)) return true;
+    if (circleBlocks(x, z, fx, fz, c.x, c.z, c.r + PLAYER_R)) return true;
   }
   // resource nodes (only standing ones)
   for (const n of s.nodes) {
     if (n.hp <= 0) continue;
     const r = n.type === 'wood' ? 0.55 : 0.8;
-    const dx = x - n.x;
-    const dz = z - n.z;
-    if (dx * dx + dz * dz < (r + PLAYER_R) * (r + PLAYER_R)) return true;
+    if (circleBlocks(x, z, fx, fz, n.x, n.z, r + PLAYER_R)) return true;
   }
   // buildings
   for (const p of s.plots) {
     if (!p.building) continue;
     const half = BUILDINGS[p.building].footprint / 2 + PLAYER_R - 0.15;
-    if (Math.abs(x - p.x) < half && Math.abs(z - p.z) < half) return true;
+    if (Math.abs(x - p.x) < half && Math.abs(z - p.z) < half) {
+      // allow escape if already overlapping (e.g. built around the player)
+      const inside = Math.abs(fx - p.x) < half && Math.abs(fz - p.z) < half;
+      const deeper =
+        Math.min(half - Math.abs(x - p.x), half - Math.abs(z - p.z)) >=
+        Math.min(half - Math.abs(fx - p.x), half - Math.abs(fz - p.z));
+      if (!inside || deeper) return true;
+    }
   }
   // npcs
   for (const npc of NPCS) {
-    const dx = x - npc.x;
-    const dz = z - npc.z;
-    if (dx * dx + dz * dz < (0.5 + PLAYER_R) * (0.5 + PLAYER_R)) return true;
+    if (circleBlocks(x, z, fx, fz, npc.x, npc.z, 0.5 + PLAYER_R)) return true;
   }
   return false;
 }

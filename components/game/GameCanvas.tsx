@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { Suspense, useRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import Player from './Player';
@@ -20,11 +20,13 @@ export default function GameCanvas() {
       style={{ touchAction: 'none' }}
     >
       <DayNightLighting />
-      <World3D />
-      <Buildings />
-      <NPCs />
-      <Player />
-      <Effects />
+      <Suspense fallback={null}>
+        <World3D />
+        <Buildings />
+        <NPCs />
+        <Player />
+        <Effects />
+      </Suspense>
     </Canvas>
   );
 }
