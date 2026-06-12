@@ -27,7 +27,7 @@ import splashImg from '../../src/assets/images/new_greenwood_splash_177963130181
 
 export default function CharacterCreator() {
   const createCharacter = useGame((s) => s.createCharacter);
-  const cancelCreate = useGame((s) => s.cancelCreate);
+  const backToMenu = useGame((s) => s.backToMenu);
   const [ap, setAp] = useState<PlayerAppearance>(() => randomAppearance());
 
   const patch = (p: Partial<PlayerAppearance>) => {
@@ -197,7 +197,7 @@ export default function CharacterCreator() {
       {/* ------------------------------ footer ------------------------------ */}
       <div className="relative z-10 flex items-center justify-center gap-3 border-t border-white/10 bg-black/60 px-4 py-3 backdrop-blur-sm">
         <button
-          onClick={cancelCreate}
+          onClick={backToMenu}
           className="rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-xs font-bold text-white/70 transition hover:bg-white/10"
         >
           ◂ Back
