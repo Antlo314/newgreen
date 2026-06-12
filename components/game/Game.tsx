@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react';
 import GameCanvas from './GameCanvas';
 import MainMenu from './MainMenu';
+import CharacterCreator from './CharacterCreator';
 import HUD from './ui/HUD';
 import Panels from './ui/Panels';
 import { useGame } from '../../src/game/store';
@@ -27,7 +28,7 @@ export default function Game() {
   useEffect(() => {
     const pick = () => {
       const s = useGame.getState();
-      if (s.phase === 'menu') {
+      if (s.phase === 'menu' || s.phase === 'create') {
         audio.playMusic(MUSIC.menu);
         return;
       }
@@ -58,6 +59,8 @@ export default function Game() {
     <div className="fixed inset-0 overflow-hidden bg-black">
       {phase === 'menu' ? (
         <MainMenu />
+      ) : phase === 'create' ? (
+        <CharacterCreator />
       ) : (
         <>
           <GameCanvas />

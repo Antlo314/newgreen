@@ -87,6 +87,7 @@ interface GameState {
   selectedPlot: string | null;
   harvesting: { nodeId: string; progress: number } | null;
   moveTarget: { x: number; z: number } | null;
+  teleportTarget: { x: number; z: number } | null;
   toasts: Toast[];
   muted: boolean;
   cameraZoom: number;
@@ -115,6 +116,8 @@ interface GameState {
   trackQuest: (id: string) => void;
   buildOnPlot: (plotId: string, buildingId: BuildingId) => void;
   upgradePlot: (plotId: string) => void;
+  unstuck: () => void;
+  completeTeleport: () => void;
   save: () => void;
 }
 
@@ -282,6 +285,7 @@ export const useGame = create<GameState>((set, get) => {
     selectedPlot: null,
     harvesting: null,
     moveTarget: null,
+    teleportTarget: null,
     toasts: [],
     muted: false,
     cameraZoom: 1,
@@ -337,6 +341,21 @@ export const useGame = create<GameState>((set, get) => {
       const cur = get().interactTarget;
       if (cur?.id === interactTarget?.id && cur?.kind === interactTarget?.kind) return;
       set({ interactTarget });
+    },
+    unstuck: () => {
+      set({ teleportTarget: { x: 0, z: 6 }, moveTarget: null, harvesting: null });
+      get().addToast('Teleported back to the town square.', 'info', '🛟');
+      get().save();
+    },
+    completeTeleport: () => {
+      const target = get().teleportTarget;
+      if (target) {
+        set({
+          px: target.x,
+          pz: target.z,
+          teleportTarget: null,
+        });
+      }
     },
     setPanel: (panel) => {
       audio.sfx('ui');

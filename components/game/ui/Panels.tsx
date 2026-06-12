@@ -329,6 +329,9 @@ function MapPanel() {
 }
 
 function HelpPanel() {
+  const unstuck = useGame((s) => s.unstuck);
+  const setPanel = useGame((s) => s.setPanel);
+
   return (
     <div className="space-y-3 text-xs text-white/80">
       <Section h="Goal">
@@ -353,6 +356,19 @@ function HelpPanel() {
         <Kbd>I</Kbd> for inventory, <Kbd>M</Kbd> for the map.
       </Section>
       <Section h="Saving">Your progress autosaves every few seconds and when you return to the menu.</Section>
+      <div className="pt-2.5 border-t border-white/10">
+        <h3 className="mb-1 text-[10px] font-bold uppercase tracking-widest text-amber-300">Stuck?</h3>
+        <p className="leading-relaxed mb-2 text-white/70">If your character is stuck inside a building and cannot move, click the button below to teleport to the safe town plaza square.</p>
+        <button
+          onClick={() => {
+            unstuck();
+            setPanel(null);
+          }}
+          className="w-full rounded-xl border border-amber-400/50 bg-amber-400/15 py-2.5 text-center text-xs font-bold text-amber-100 shadow-md hover:bg-amber-400/25 active:scale-95 transition"
+        >
+          🛟 Teleport to Town Square
+        </button>
+      </div>
     </div>
   );
 }

@@ -96,6 +96,12 @@ export default function Player() {
       initialized.current = true;
     }
 
+    // handle teleporting if requested
+    if (s.teleportTarget) {
+      group.current.position.set(s.teleportTarget.x, 0, s.teleportTarget.z);
+      s.completeTeleport();
+    }
+
     // run the global game tick here (single driver)
     s.tick(dt);
 
