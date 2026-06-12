@@ -331,7 +331,8 @@ export const useGame = create<GameState>((set, get) => {
     },
 
     backToMenu: () => {
-      get().save();
+      // only persist real progress — saving from the creator would wipe an existing legacy
+      if (get().phase === 'playing') get().save();
       set({ phase: 'menu', panel: null, dialogue: null, harvesting: null, moveTarget: null });
     },
 

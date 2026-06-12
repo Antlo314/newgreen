@@ -174,15 +174,20 @@ export default function Player() {
   });
 
   const s0 = useGame.getState();
+  const ap = useGame((s) => s.appearance);
 
   return (
     <group ref={group} position={[s0.px, 0, s0.pz]}>
       <Humanoid
-        skin="#7a4a2b"
-        shirt="#1f6f50"
-        pants="#33302c"
-        hat="cap"
-        hatColor="#c9a227"
+        skin={ap.skin}
+        shirt={ap.shirt}
+        pants={ap.pants}
+        hat={ap.hat}
+        hatColor={ap.hatColor}
+        hair={ap.hair}
+        hairColor={ap.hairColor}
+        accessory={ap.accessory}
+        build={ap.build}
         walkRef={walkRef}
       />
       {/* soft blob shadow helper ring when harvesting */}
