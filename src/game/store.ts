@@ -12,11 +12,13 @@ import {
   xpForLevel,
 } from './data';
 import { generatePlots, generateResourceNodes } from './world';
+import { CALLING_BY_ID, DEFAULT_APPEARANCE } from './customization';
 import type {
   BuildingId,
   DialogueState,
   InteractTarget,
   PanelId,
+  PlayerAppearance,
   Plot,
   QuestProgress,
   QuestStatus,
@@ -42,7 +44,7 @@ const HARVEST_YIELD: Record<ResourceType, [number, number]> = {
   clay: [1, 2],
 };
 
-export type GamePhase = 'menu' | 'playing';
+export type GamePhase = 'menu' | 'create' | 'playing';
 
 let toastId = 1;
 
@@ -51,6 +53,7 @@ interface GameState {
   hasSave: boolean;
 
   // player
+  appearance: PlayerAppearance;
   px: number;
   pz: number;
   facing: number; // radians
@@ -90,6 +93,7 @@ interface GameState {
 
   // actions
   startGame: (fresh: boolean) => void;
+  createCharacter: (appearance: PlayerAppearance) => void;
   backToMenu: () => void;
   setPlayerPos: (x: number, z: number, facing: number, moving: boolean) => void;
   setMoveTarget: (t: { x: number; z: number } | null) => void;
@@ -127,6 +131,7 @@ function initialQuests(): Record<string, QuestProgress> {
 
 function freshPlayerState() {
   return {
+    appearance: DEFAULT_APPEARANCE,
     px: 0,
     pz: 6,
     facing: Math.PI,
@@ -290,8 +295,35 @@ export const useGame = create<GameState>((set, get) => {
           return;
         }
       }
-      set({ ...freshPlayerState(), phase: 'playing', panel: null, dialogue: null, harvesting: null, moveTarget: null, toasts: [] });
+      // new legacy: design your founder first
+      set({ phase: 'create', panel: null, dialogue: null, harvesting: null, moveTarget: null });
+    },
+
+    createCharacter: (appearance) => {
+      const calling = CALLING_BY_ID[appearance.calling];
+      const fresh = freshPlayerState();
+      const b = calling?.bonus ?? {};
+      set({
+        ...fresh,
+        appearance,
+        wood: fresh.wood + (b.wood ?? 0),
+        stone: fresh.stone + (b.stone ?? 0),
+        clay: fresh.clay + (b.clay ?? 0),
+        bswx: fresh.bswx + (b.bswx ?? 0),
+        staminaMax: fresh.staminaMax + (b.staminaMax ?? 0),
+        stamina: fresh.staminaMax + (b.staminaMax ?? 0),
+        reputation: fresh.reputation + (b.rep ?? 0),
+        phase: 'playing',
+        panel: null,
+        dialogue: null,
+        harvesting: null,
+        moveTarget: null,
+        toasts: [],
+      });
+      const first = appearance.name.split(' ')[0];
+      get().addToast(`Welcome to Greenwood, ${first} the ${calling?.name ?? 'Builder'}.`, 'reward', '✦');
       get().addToast('Speak with O.W. Gurley at the plaza to begin.', 'quest', '!');
+      get().save();
     },
 
     backToMenu: () => {
@@ -652,6 +684,7 @@ export const useGame = create<GameState>((set, get) => {
         const s = get();
         const data = {
           v: 1,
+          appearance: s.appearance,
           px: s.px, pz: s.pz,
           bswx: s.bswx, wood: s.wood, stone: s.stone, clay: s.clay,
           stamina: s.stamina, staminaMax: s.staminaMax,
@@ -750,6 +783,7 @@ function loadSave(): Partial<GameState> | null {
     const quests = initialQuestsMerge(data.quests ?? {});
 
     return {
+      appearance: { ...DEFAULT_APPEARANCE, ...(data.appearance ?? {}) },
       px: data.px ?? 0,
       pz: data.pz ?? 6,
       bswx: data.bswx ?? 15,

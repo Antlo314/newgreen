@@ -115,6 +115,35 @@ export interface QuestProgress {
   progress: number[];
 }
 
+export type HairStyle = 'fade' | 'afro' | 'locs' | 'braids' | 'puffs' | 'waves' | 'bald';
+export type HatStyle = 'none' | 'cap' | 'bowler' | 'tophat' | 'headwrap';
+export type AccessoryStyle = 'none' | 'glasses' | 'earrings' | 'bowtie';
+export type BodyBuild = 'broad' | 'slender';
+
+export interface PlayerAppearance {
+  name: string;
+  /** starting calling/profession — grants a one-time bonus */
+  calling: string;
+  build: BodyBuild;
+  skin: string;
+  hair: HairStyle;
+  hairColor: string;
+  hat: HatStyle;
+  hatColor: string;
+  shirt: string;
+  pants: string;
+  accessory: AccessoryStyle;
+}
+
+export interface CallingDef {
+  id: string;
+  name: string;
+  icon: string;
+  desc: string;
+  bonusLabel: string;
+  bonus: { wood?: number; stone?: number; clay?: number; bswx?: number; staminaMax?: number; rep?: number };
+}
+
 export type PanelId =
   | null
   | 'quests'
