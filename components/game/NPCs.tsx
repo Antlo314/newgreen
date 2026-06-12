@@ -3,16 +3,25 @@
 import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import Humanoid, { WalkRef } from './Humanoid';
+import { WalkRef } from './Humanoid';
+import SkinnedCharacter from './SkinnedCharacter';
 import { NPCS, QUESTS } from '../../src/game/data';
+import { DEFAULT_APPEARANCE } from '../../src/game/customization';
 import { useGame } from '../../src/game/store';
-import type { NPCDef } from '../../src/game/types';
+import type { NPCDef, PlayerAppearance } from '../../src/game/types';
 
 const SHIRTS: Record<string, string> = {
   gurley: '#5d3a8e',
   rector: '#b03a48',
   stradford: '#2b4a6f',
   gerumba: '#946018',
+};
+
+const NPC_MODEL: Record<string, string> = {
+  gurley: 'suit_m',
+  rector: 'formal_f',
+  stradford: 'suit_m',
+  gerumba: 'casual_m',
 };
 
 export default function NPCs() {
@@ -72,17 +81,26 @@ function NPC({ def }: { def: NPCDef }) {
     }
   });
 
+  const appearance: PlayerAppearance = useMemo(
+    () => ({
+      ...DEFAULT_APPEARANCE,
+      model: NPC_MODEL[def.id] ?? 'suit_m',
+      skin: def.color,
+      shirt: SHIRTS[def.id] ?? '#444444',
+      pants: '#2c2c30',
+      // HeadGear renders 'crown' fine even though the creator doesn't offer it
+      hat: def.hat as PlayerAppearance['hat'],
+      hatColor: def.hat === 'headwrap' ? '#c9622f' : '#1c1a18',
+      hair: 'classic',
+      accessory: 'none',
+    }),
+    [def]
+  );
+
   return (
     <group position={[def.x, 0, def.z]}>
       <group ref={group}>
-        <Humanoid
-          skin={def.color}
-          shirt={SHIRTS[def.id] ?? '#444444'}
-          pants="#2c2c30"
-          hat={def.hat}
-          hatColor={def.hat === 'headwrap' ? '#c9622f' : '#1c1a18'}
-          walkRef={walkRef}
-        />
+        <SkinnedCharacter appearance={appearance} walkRef={walkRef} />
       </group>
       {/* quest marker */}
       <mesh ref={marker} position={[0, 2.25, 0]} visible={false}>

@@ -6,7 +6,8 @@ Walk the district. Harvest lumber, stone, and clay. Build storefronts, trade, ta
 
 ## Features
 
-- **Character creator** — design your founder: era-appropriate names, six callings with founding bonuses, eight skin tones, natural hairstyles (afro, locs, braids, afro puffs, waves), 1920s hats and attire, with a live 3D preview
+- **Character creator** — design your founder: era-appropriate names, six callings with founding bonuses, eight rigged character figures, eight skin tones, natural hairstyles (afro, locs, braids, afro puffs, waves), 1920s hats and attire, with a live animated 3D preview
+- **Fully animated characters** — rigged Quaternius models with walk/run/interact animations; hats, hair, and accessories ride the head bone through every animation
 - **Living 3D world** — day/night cycle with adaptive lighting and music, regrowing resources, NPCs with quests and gossip, click-to-move or WASD
 - **Economy & progression** — build and upgrade eight building types, earn BSWX, gain reputation and levels, autosaving to local storage
 - **Performance-first rendering** — instanced Kenney models keep the whole forest and quarry to a handful of draw calls

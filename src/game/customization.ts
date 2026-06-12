@@ -15,7 +15,65 @@ export const SKIN_TONES: { name: string; color: string }[] = [
   { name: 'Honey Bronze', color: '#ab7c4c' },
 ];
 
+export interface CharacterModelDef {
+  id: string;
+  name: string;
+  desc: string;
+  file: string;
+  /** material names to recolor with the shirt / trousers / hat palette picks */
+  slots: { shirt: string[]; pants: string[]; hat?: string[] };
+}
+
+// Quaternius Ultimate Modular Men/Women (CC0) — era-appropriate picks
+export const CHARACTER_MODELS: CharacterModelDef[] = [
+  {
+    id: 'suit_m', name: 'The Tailored', desc: 'Three-piece suit, fresh from the presser.',
+    file: '/models/character/modular/Suit.gltf',
+    slots: { shirt: ['Suit'], pants: ['Grey'] },
+  },
+  {
+    id: 'farmer_m', name: 'The Grower', desc: 'Overalls and bottomland mud.',
+    file: '/models/character/modular/Farmer.gltf',
+    slots: { shirt: ['LightBlue'], pants: ['Brown'] },
+  },
+  {
+    id: 'worker_m', name: 'The Builder', desc: 'Vest and boots, ready for the site.',
+    file: '/models/character/modular/Worker.gltf',
+    slots: { shirt: ['Worker_Vest'], pants: ['Grey'], hat: ['Worker_Yellow'] },
+  },
+  {
+    id: 'casual_m', name: 'The Scholar', desc: 'Shirtsleeves rolled for honest work.',
+    file: '/models/character/modular/Casual_2.gltf',
+    slots: { shirt: ['Red_Dark'], pants: ['LightBlue'] },
+  },
+  {
+    id: 'suit_f', name: 'The Boss', desc: 'Blazer sharp enough to cut a deal.',
+    file: '/models/character/modular/F_Suit.gltf',
+    slots: { shirt: ['Black'], pants: ['Brown'] },
+  },
+  {
+    id: 'formal_f', name: 'The Songbird', desc: 'Evening dress for the Dreamland stage.',
+    file: '/models/character/modular/F_Formal.gltf',
+    slots: { shirt: ['Red'], pants: ['Brown'] },
+  },
+  {
+    id: 'casual_f', name: 'The Seamstress', desc: 'Practical wear with perfect stitching.',
+    file: '/models/character/modular/F_Casual.gltf',
+    slots: { shirt: ['Orange'], pants: ['Grey'] },
+  },
+  {
+    id: 'worker_f', name: 'The Foreman', desc: 'She runs the crew, not the other way.',
+    file: '/models/character/modular/F_Worker.gltf',
+    slots: { shirt: ['Worker_Vest'], pants: ['Brown_02'], hat: ['Worker_Yellow'] },
+  },
+];
+
+export const MODEL_BY_ID: Record<string, CharacterModelDef> = Object.fromEntries(
+  CHARACTER_MODELS.map((m) => [m.id, m])
+);
+
 export const HAIR_STYLES: { id: HairStyle; name: string; icon: string }[] = [
+  { id: 'classic', name: 'Classic', icon: '◆' },
   { id: 'fade', name: 'Low Fade', icon: '▬' },
   { id: 'afro', name: 'Afro', icon: '●' },
   { id: 'locs', name: 'Locs', icon: '☰' },
@@ -164,6 +222,7 @@ export function randomAppearance(): PlayerAppearance {
   return {
     name: randomName(),
     calling: pick(CALLINGS).id,
+    model: pick(CHARACTER_MODELS).id,
     build: pick(BUILDS).id,
     skin: pick(SKIN_TONES).color,
     hair: pick(HAIR_STYLES).id,
@@ -179,6 +238,7 @@ export function randomAppearance(): PlayerAppearance {
 export const DEFAULT_APPEARANCE: PlayerAppearance = {
   name: 'Booker Freeman',
   calling: 'carpenter',
+  model: 'suit_m',
   build: 'broad',
   skin: '#7a4a2b',
   hair: 'fade',

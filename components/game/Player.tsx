@@ -3,7 +3,8 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import Humanoid, { WalkRef } from './Humanoid';
+import { WalkRef } from './Humanoid';
+import SkinnedCharacter from './SkinnedCharacter';
 import { useGame } from '../../src/game/store';
 import { BUILDINGS, NPCS, QUESTS, RESOURCE_LABEL } from '../../src/game/data';
 
@@ -175,21 +176,11 @@ export default function Player() {
 
   const s0 = useGame.getState();
   const ap = useGame((s) => s.appearance);
+  const harvesting = useGame((s) => s.harvesting !== null);
 
   return (
     <group ref={group} position={[s0.px, 0, s0.pz]}>
-      <Humanoid
-        skin={ap.skin}
-        shirt={ap.shirt}
-        pants={ap.pants}
-        hat={ap.hat}
-        hatColor={ap.hatColor}
-        hair={ap.hair}
-        hairColor={ap.hairColor}
-        accessory={ap.accessory}
-        build={ap.build}
-        walkRef={walkRef}
-      />
+      <SkinnedCharacter appearance={ap} walkRef={walkRef} action={harvesting ? 'interact' : 'auto'} />
       {/* soft blob shadow helper ring when harvesting */}
       <HarvestRing />
     </group>

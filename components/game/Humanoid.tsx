@@ -83,57 +83,7 @@ export default function Humanoid({
           <boxGeometry args={[0.34, 0.34, 0.32]} />
           <meshStandardMaterial color={skin} roughness={0.7} />
         </mesh>
-        <Hair style={hair} color={hairColor} hat={hat} />
-        <Accessory style={accessory} />
-        {/* hats */}
-        {hat === 'tophat' && (
-          <group position={[0, 1.68, 0]}>
-            <mesh castShadow>
-              <cylinderGeometry args={[0.24, 0.24, 0.04, 12]} />
-              <meshStandardMaterial color={hatColor} roughness={0.6} />
-            </mesh>
-            <mesh position={[0, 0.16, 0]} castShadow>
-              <cylinderGeometry args={[0.16, 0.16, 0.3, 12]} />
-              <meshStandardMaterial color={hatColor} roughness={0.6} />
-            </mesh>
-          </group>
-        )}
-        {hat === 'bowler' && (
-          <group position={[0, 1.66, 0]}>
-            <mesh castShadow>
-              <cylinderGeometry args={[0.23, 0.23, 0.03, 12]} />
-              <meshStandardMaterial color={hatColor} roughness={0.6} />
-            </mesh>
-            <mesh position={[0, 0.07, 0]} castShadow>
-              <sphereGeometry args={[0.16, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
-              <meshStandardMaterial color={hatColor} roughness={0.6} />
-            </mesh>
-          </group>
-        )}
-        {hat === 'headwrap' && (
-          <mesh position={[0, 1.64, 0]} castShadow>
-            <sphereGeometry args={[0.2, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
-            <meshStandardMaterial color={hatColor} roughness={0.8} />
-          </mesh>
-        )}
-        {hat === 'crown' && (
-          <mesh position={[0, 1.66, 0]} castShadow>
-            <cylinderGeometry args={[0.19, 0.15, 0.14, 8]} />
-            <meshStandardMaterial color="#d4af37" metalness={0.7} roughness={0.3} />
-          </mesh>
-        )}
-        {hat === 'cap' && (
-          <group position={[0, 1.63, 0]}>
-            <mesh castShadow>
-              <sphereGeometry args={[0.18, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
-              <meshStandardMaterial color={hatColor} roughness={0.7} />
-            </mesh>
-            <mesh position={[0, 0, 0.17]} castShadow>
-              <boxGeometry args={[0.22, 0.03, 0.14]} />
-              <meshStandardMaterial color={hatColor} roughness={0.7} />
-            </mesh>
-          </group>
-        )}
+        <HeadGear hat={hat} hatColor={hatColor} hair={hair} hairColor={hairColor} accessory={accessory} />
         {/* arms (pivot at shoulder) */}
         <mesh ref={lArm} position={[-armX, 1.18, 0]} castShadow>
           <boxGeometry args={[armW, 0.5, 0.14]} />
@@ -158,6 +108,80 @@ export default function Humanoid({
 }
 
 // ---------------------------------------------------------------------------
+// HeadGear — hats, natural hairstyles, and accessories in body-root space
+// (head center at y≈1.45). Reused by SkinnedCharacter via a head-bone portal.
+// ---------------------------------------------------------------------------
+
+export function HeadGear({
+  hat,
+  hatColor,
+  hair,
+  hairColor,
+  accessory,
+}: {
+  hat: string;
+  hatColor: string;
+  hair: HairStyle;
+  hairColor: string;
+  accessory: AccessoryStyle;
+}) {
+  return (
+    <group>
+      <Hair style={hair} color={hairColor} hat={hat} />
+      <Accessory style={accessory} />
+      {hat === 'tophat' && (
+        <group position={[0, 1.68, 0]}>
+          <mesh castShadow>
+            <cylinderGeometry args={[0.24, 0.24, 0.04, 12]} />
+            <meshStandardMaterial color={hatColor} roughness={0.6} />
+          </mesh>
+          <mesh position={[0, 0.16, 0]} castShadow>
+            <cylinderGeometry args={[0.16, 0.16, 0.3, 12]} />
+            <meshStandardMaterial color={hatColor} roughness={0.6} />
+          </mesh>
+        </group>
+      )}
+      {hat === 'bowler' && (
+        <group position={[0, 1.66, 0]}>
+          <mesh castShadow>
+            <cylinderGeometry args={[0.23, 0.23, 0.03, 12]} />
+            <meshStandardMaterial color={hatColor} roughness={0.6} />
+          </mesh>
+          <mesh position={[0, 0.07, 0]} castShadow>
+            <sphereGeometry args={[0.16, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
+            <meshStandardMaterial color={hatColor} roughness={0.6} />
+          </mesh>
+        </group>
+      )}
+      {hat === 'headwrap' && (
+        <mesh position={[0, 1.64, 0]} castShadow>
+          <sphereGeometry args={[0.2, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
+          <meshStandardMaterial color={hatColor} roughness={0.8} />
+        </mesh>
+      )}
+      {hat === 'crown' && (
+        <mesh position={[0, 1.66, 0]} castShadow>
+          <cylinderGeometry args={[0.19, 0.15, 0.14, 8]} />
+          <meshStandardMaterial color="#d4af37" metalness={0.7} roughness={0.3} />
+        </mesh>
+      )}
+      {hat === 'cap' && (
+        <group position={[0, 1.63, 0]}>
+          <mesh castShadow>
+            <sphereGeometry args={[0.18, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
+            <meshStandardMaterial color={hatColor} roughness={0.7} />
+          </mesh>
+          <mesh position={[0, 0, 0.17]} castShadow>
+            <boxGeometry args={[0.22, 0.03, 0.14]} />
+            <meshStandardMaterial color={hatColor} roughness={0.7} />
+          </mesh>
+        </group>
+      )}
+    </group>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Natural hairstyles built from primitives. Tall styles compress to a low base
 // under a hat so brims never clip; locs and braids keep their hanging strands.
 // ---------------------------------------------------------------------------
@@ -166,6 +190,7 @@ const LOC_ANGLES = [-2.4, -1.7, -1.0, 1.0, 1.7, 2.4];
 
 function Hair({ style, color, hat }: { style: HairStyle; color: string; hat: string }) {
   if (style === 'bald') return null;
+  if (style === 'classic') style = 'fade'; // primitive bodies have no built-in hair
   const covered = hat !== 'none';
   const strands = style === 'locs' || style === 'braids';
 

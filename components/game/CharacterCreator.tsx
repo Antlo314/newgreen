@@ -1,17 +1,17 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { Suspense, useRef, useState } from 'react';
 import Image from 'next/image';
 import { Canvas, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import Humanoid from './Humanoid';
+import SkinnedCharacter from './SkinnedCharacter';
 import { useGame } from '../../src/game/store';
 import { audio } from '../../src/game/audio';
 import {
   ACCESSORIES,
-  BUILDS,
   CALLINGS,
   CALLING_BY_ID,
+  CHARACTER_MODELS,
   HAIR_COLORS,
   HAIR_STYLES,
   HAT_COLORS,
@@ -114,12 +114,22 @@ export default function CharacterCreator() {
               <p className="mt-2 text-[11px] italic leading-relaxed text-white/50">“{calling?.desc}”</p>
             </Section>
 
-            <Section title="Build">
-              <div className="flex gap-2">
-                {BUILDS.map((b) => (
-                  <Chip key={b.id} active={ap.build === b.id} onClick={() => patch({ build: b.id })} title={b.desc}>
-                    {b.name}
-                  </Chip>
+            <Section title="Figure" hint="Your body and garments — recolor them below">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {CHARACTER_MODELS.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => patch({ model: m.id })}
+                    title={m.desc}
+                    className={`rounded-xl border px-2 py-1.5 text-left transition ${
+                      ap.model === m.id
+                        ? 'border-amber-400/70 bg-amber-400/15'
+                        : 'border-white/10 bg-black/40 hover:bg-white/5'
+                    }`}
+                  >
+                    <div className="text-[11px] font-semibold text-amber-50">{m.name}</div>
+                    <div className="mt-0.5 truncate text-[9px] leading-snug text-white/45">{m.desc}</div>
+                  </button>
                 ))}
               </div>
             </Section>
@@ -254,7 +264,9 @@ function PreviewStage({ ap }: { ap: PlayerAppearance }) {
         <ambientLight intensity={0.7} color="#ffeedd" />
         <directionalLight position={[3, 5, 4]} intensity={1.7} color="#fff0d8" />
         <directionalLight position={[-4, 2, -3]} intensity={0.5} color="#7d9cd3" />
-        <Turntable ap={ap} spin={spin} />
+        <Suspense fallback={null}>
+          <Turntable ap={ap} spin={spin} />
+        </Suspense>
       </Canvas>
     </div>
   );
@@ -277,17 +289,7 @@ function Turntable({
   return (
     <group position={[0, -0.95, 0]}>
       <group ref={group}>
-        <Humanoid
-          skin={ap.skin}
-          shirt={ap.shirt}
-          pants={ap.pants}
-          hat={ap.hat}
-          hatColor={ap.hatColor}
-          hair={ap.hair}
-          hairColor={ap.hairColor}
-          accessory={ap.accessory}
-          build={ap.build}
-        />
+        <SkinnedCharacter appearance={ap} />
       </group>
       {/* pedestal */}
       <mesh position={[0, -0.09, 0]}>

@@ -115,7 +115,7 @@ export interface QuestProgress {
   progress: number[];
 }
 
-export type HairStyle = 'fade' | 'afro' | 'locs' | 'braids' | 'puffs' | 'waves' | 'bald';
+export type HairStyle = 'classic' | 'fade' | 'afro' | 'locs' | 'braids' | 'puffs' | 'waves' | 'bald';
 export type HatStyle = 'none' | 'cap' | 'bowler' | 'tophat' | 'headwrap';
 export type AccessoryStyle = 'none' | 'glasses' | 'earrings' | 'bowtie';
 export type BodyBuild = 'broad' | 'slender';
@@ -124,6 +124,8 @@ export interface PlayerAppearance {
   name: string;
   /** starting calling/profession — grants a one-time bonus */
   calling: string;
+  /** rigged character model id (see CHARACTER_MODELS) */
+  model: string;
   build: BodyBuild;
   skin: string;
   hair: HairStyle;
