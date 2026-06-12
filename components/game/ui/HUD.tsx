@@ -36,6 +36,7 @@ function StatPill({ icon, value, label, color }: { icon: string; value: string; 
 }
 
 function TopBar() {
+  const name = useGame((s) => s.appearance.name);
   const bswx = useGame((s) => s.bswx);
   const wood = useGame((s) => s.wood);
   const stone = useGame((s) => s.stone);
@@ -67,6 +68,7 @@ function TopBar() {
 
       <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
         <div className="flex flex-col gap-1 rounded-lg border border-white/10 bg-black/55 px-2.5 py-1.5 backdrop-blur-sm">
+          <div className="max-w-[140px] truncate text-[10px] font-bold text-amber-100/90">{name}</div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold tracking-wide text-amber-300">LV {level}</span>
             <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/15 sm:w-24">
