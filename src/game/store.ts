@@ -13,10 +13,12 @@ import {
 } from './data';
 import { generatePlots, generateResourceNodes } from './world';
 import { CALLING_BY_ID, DEFAULT_APPEARANCE } from './customization';
+import { deriveResidents, employmentStats } from './residents';
 import type {
   BuildingId,
   DialogueState,
   InteractTarget,
+  MarketResource,
   PanelId,
   PlayerAppearance,
   Plot,
@@ -43,6 +45,16 @@ const HARVEST_YIELD: Record<ResourceType, [number, number]> = {
   stone: [2, 3],
   clay: [1, 2],
 };
+
+// circulation economy
+const FOOD_PER_RESIDENT = 0.15; // eaten per economy tick
+const PANTRY_BUFFER = 4; // food the grocery won't sell off
+const FOOD_PRICE = 2; // BSWX per surplus food sold
+const GOODS_PRICE = 3; // BSWX per good sold through commerce
+const WOOD_RESERVE = 25; // lumber the workshop leaves for construction
+const FOOD_CAP = 99;
+const GOODS_CAP = 99;
+const MARKET_SPREAD = 1.25; // buy price multiplier over sell price
 
 export type GamePhase = 'menu' | 'create' | 'playing';
 
@@ -75,6 +87,15 @@ interface GameState {
   plots: Plot[];
   timeOfDay: number; // 0..1 (0.25 = dawn, 0.5 = noon, 0.75 = dusk)
   day: number;
+
+  // circulation economy
+  food: number;
+  goods: number;
+  /** income multiplier from active supply-chain links (display + applied) */
+  circulation: number;
+  /** false only when there are residents and not enough food */
+  townFed: boolean;
+  marketPrices: Record<MarketResource, number>;
 
   // quests
   quests: Record<string, QuestProgress>;
@@ -116,6 +137,8 @@ interface GameState {
   trackQuest: (id: string) => void;
   buildOnPlot: (plotId: string, buildingId: BuildingId) => void;
   upgradePlot: (plotId: string) => void;
+  sellResource: (type: MarketResource, amount: number) => void;
+  buyResource: (type: Exclude<MarketResource, 'goods'>, amount: number) => void;
   unstuck: () => void;
   completeTeleport: () => void;
   save: () => void;
@@ -154,6 +177,11 @@ function freshPlayerState() {
     plots: generatePlots(),
     timeOfDay: 0.32,
     day: 1,
+    food: 6,
+    goods: 0,
+    circulation: 1,
+    townFed: true,
+    marketPrices: { wood: 2, stone: 2.4, clay: 3, goods: 4 },
     quests: initialQuests(),
     trackedQuest: 'first_foundations' as string | null,
   };
@@ -165,6 +193,7 @@ export const useGame = create<GameState>((set, get) => {
   let economyTimer = 0;
   let saveTimer = 0;
   let staminaWarned = false;
+  let hungerWarned = false;
 
   // ---- quest helpers (operate on draft-ish copies) ----
 
@@ -437,6 +466,12 @@ export const useGame = create<GameState>((set, get) => {
       for (const p of finishing) {
         const cfg = BUILDINGS[p.building!];
         get().addToast(`${cfg.name} is complete! +${cfg.repReward} reputation`, 'reward', '⚒');
+        if (p.building === 'cottage') {
+          get().addToast('A family moves into Greenwood. Population grows!', 'info', '👪');
+        }
+        if (p.building === 'grocery') {
+          get().addToast('The market stalls open — press T to trade resources.', 'quest', '⚖');
+        }
         set({ reputation: get().reputation + cfg.repReward });
         grantXp(cfg.xpReward);
         audio.sfx('complete');
@@ -460,20 +495,85 @@ export const useGame = create<GameState>((set, get) => {
         }
       }
 
-      // economy tick
+      // ------------------------------------------------------------------
+      // economy tick — the circulation model. A dollar that passes through
+      // more Greenwood hands is worth more: every active supply-chain link
+      // (grow → feed → sell → craft → trade → employ) raises the multiplier.
+      // ------------------------------------------------------------------
       economyTimer += dt;
       if (economyTimer >= ECONOMY_TICK) {
         economyTimer = 0;
         const s = get();
+        const levelOf = (id: BuildingId) =>
+          s.plots.reduce((sum, p) => (p.building === id && p.construction === 0 ? sum + p.level : sum), 0);
+
+        const residents = deriveResidents(s.plots);
+        const { population, employed, employedRatio } = employmentStats(residents);
+
+        // 1) gardens grow food
+        let food = Math.min(FOOD_CAP, s.food + levelOf('garden'));
+
+        // 2) families eat — a fed town prospers, a hungry one falters
+        const need = population * FOOD_PER_RESIDENT;
+        const townFed = population === 0 || food >= need;
+        if (population > 0 && townFed) food -= need;
+
+        // 3) the grocery sells surplus food (always keeps a pantry)
+        const foodSold = Math.min(Math.max(0, Math.floor(food - PANTRY_BUFFER)), 2 * levelOf('grocery'));
+        food -= foodSold;
+
+        // 4) the workshop crafts goods from spare lumber
+        let wood = s.wood;
+        let goods = s.goods;
+        const crafted = Math.min(levelOf('workshop'), Math.max(0, wood - WOOD_RESERVE), GOODS_CAP - goods);
+        wood -= crafted;
+        goods += crafted;
+
+        // 5) commerce moves goods (sugar bowl, hotel, cultural hall)
+        const goodsSold = Math.min(goods, levelOf('sugarbowl') + levelOf('hotel') + levelOf('cultural_hall'));
+        goods -= goodsSold;
+
+        // 6) circulation multiplier from active links
+        const links =
+          (levelOf('garden') > 0 ? 1 : 0) +
+          (population > 0 && townFed ? 1 : 0) +
+          (foodSold > 0 ? 1 : 0) +
+          (crafted > 0 ? 1 : 0) +
+          (goodsSold > 0 ? 1 : 0) +
+          (employed > 0 ? 1 : 0);
+        const circulation = Math.round((1 + links * 0.05 + employedRatio * 0.15) * 100) / 100;
+
         const cottages = s.plots.filter((p) => p.building === 'cottage' && p.construction === 0).length;
         const gardens = s.plots.filter((p) => p.building === 'garden' && p.construction === 0).length;
-        const mult = 1 + cottages * COTTAGE_INCOME_BONUS + gardens * GARDEN_INCOME_BONUS;
+        const mult =
+          (1 + cottages * COTTAGE_INCOME_BONUS + gardens * GARDEN_INCOME_BONUS) *
+          circulation *
+          (population > 0 && !townFed ? 0.8 : 1);
+
         let income = 0;
         for (const p of s.plots) {
           if (!p.building || p.construction > 0) continue;
           income += BUILDINGS[p.building].income * p.level;
         }
+        income += foodSold * FOOD_PRICE + goodsSold * GOODS_PRICE;
         income = Math.round(income * mult);
+
+        // market prices drift like a real exchange
+        const drift = (v: number, lo: number, hi: number) =>
+          Math.round(Math.min(hi, Math.max(lo, v + (Math.random() - 0.5) * 0.36)) * 10) / 10;
+        const marketPrices = {
+          wood: drift(s.marketPrices.wood, 1, 3.2),
+          stone: drift(s.marketPrices.stone, 1.2, 3.6),
+          clay: drift(s.marketPrices.clay, 1.5, 4.5),
+          goods: drift(s.marketPrices.goods, 2.5, 5.5),
+        };
+
+        set({ food: Math.round(food * 10) / 10, goods, wood, circulation, townFed, marketPrices });
+        if (population > 0 && !townFed && !hungerWarned) {
+          hungerWarned = true;
+          get().addToast('Greenwood is hungry! Build or upgrade gardens to feed your residents.', 'warn', '🥖');
+        }
+        if (townFed) hungerWarned = false;
         if (income > 0) {
           earn(income);
           audio.sfx('coin');
@@ -699,6 +799,30 @@ export const useGame = create<GameState>((set, get) => {
       applyQuestEvent('upgrade', null, 1);
     },
 
+    sellResource: (type, amount) => {
+      const s = get();
+      const have = type === 'goods' ? s.goods : s[type];
+      const qty = Math.min(amount, Math.floor(have));
+      if (qty <= 0) return;
+      const gain = Math.max(1, Math.floor(s.marketPrices[type] * qty));
+      set({ [type]: have - qty } as never);
+      earn(gain);
+      audio.sfx('coin');
+      get().addToast(`Sold ${qty} ${RESOURCE_LABEL[type]} for ◆${gain}`, 'reward', '⚖');
+    },
+
+    buyResource: (type, amount) => {
+      const s = get();
+      const cost = Math.ceil(s.marketPrices[type] * MARKET_SPREAD * amount);
+      if (s.bswx < cost) {
+        get().addToast('Not enough BSWX for that purchase.', 'warn', '!');
+        return;
+      }
+      set({ bswx: s.bswx - cost, [type]: s[type] + amount } as never);
+      audio.sfx('coin');
+      get().addToast(`Bought ${amount} ${RESOURCE_LABEL[type]} for ◆${cost}`, 'info', '⚖');
+    },
+
     save: () => {
       try {
         const s = get();
@@ -707,6 +831,7 @@ export const useGame = create<GameState>((set, get) => {
           appearance: s.appearance,
           px: s.px, pz: s.pz,
           bswx: s.bswx, wood: s.wood, stone: s.stone, clay: s.clay,
+          food: s.food, goods: s.goods, marketPrices: s.marketPrices,
           stamina: s.stamina, staminaMax: s.staminaMax,
           reputation: s.reputation, level: s.level, xp: s.xp, totalEarned: s.totalEarned,
           timeOfDay: s.timeOfDay, day: s.day,
@@ -812,6 +937,9 @@ function loadSave(): Partial<GameState> | null {
       clay: data.clay ?? 0,
       stamina: data.stamina ?? 100,
       staminaMax: data.staminaMax ?? 100,
+      food: data.food ?? 6,
+      goods: data.goods ?? 0,
+      marketPrices: { wood: 2, stone: 2.4, clay: 3, goods: 4, ...(data.marketPrices ?? {}) },
       reputation: data.reputation ?? 0,
       level: data.level ?? 1,
       xp: data.xp ?? 0,

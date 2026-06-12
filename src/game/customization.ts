@@ -209,29 +209,29 @@ const LAST_NAMES = [
   'Whitfield', 'Calloway', 'Pemberton', 'Abernathy', 'Vesey', 'Stokes', 'Mosely',
 ];
 
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
+function pick<T>(arr: T[], rng: () => number = Math.random): T {
+  return arr[Math.floor(rng() * arr.length)];
 }
 
-export function randomName(): string {
-  return `${pick(FIRST_NAMES)} ${pick(LAST_NAMES)}`;
+export function randomName(rng: () => number = Math.random): string {
+  return `${pick(FIRST_NAMES, rng)} ${pick(LAST_NAMES, rng)}`;
 }
 
-export function randomAppearance(): PlayerAppearance {
-  const hat = pick(HAT_STYLES).id;
+export function randomAppearance(rng: () => number = Math.random): PlayerAppearance {
+  const hat = pick(HAT_STYLES, rng).id;
   return {
-    name: randomName(),
-    calling: pick(CALLINGS).id,
-    model: pick(CHARACTER_MODELS).id,
-    build: pick(BUILDS).id,
-    skin: pick(SKIN_TONES).color,
-    hair: pick(HAIR_STYLES).id,
-    hairColor: pick(HAIR_COLORS).color,
+    name: randomName(rng),
+    calling: pick(CALLINGS, rng).id,
+    model: pick(CHARACTER_MODELS, rng).id,
+    build: pick(BUILDS, rng).id,
+    skin: pick(SKIN_TONES, rng).color,
+    hair: pick(HAIR_STYLES, rng).id,
+    hairColor: pick(HAIR_COLORS, rng).color,
     hat,
-    hatColor: pick(HAT_COLORS).color,
-    shirt: pick(SHIRT_COLORS).color,
-    pants: pick(PANTS_COLORS).color,
-    accessory: pick(ACCESSORIES).id,
+    hatColor: pick(HAT_COLORS, rng).color,
+    shirt: pick(SHIRT_COLORS, rng).color,
+    pants: pick(PANTS_COLORS, rng).color,
+    accessory: pick(ACCESSORIES, rng).id,
   };
 }
 

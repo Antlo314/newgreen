@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useRef } from 'react';
-import { useFrame } from '@react-three/fiber';
+import React, { useMemo, useRef } from 'react';
+import { useFrame, useLoader } from '@react-three/fiber';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import { useGame } from '../../src/game/store';
 import type { BuildingId, Plot } from '../../src/game/types';
@@ -108,7 +109,7 @@ function Building({ plot }: { plot: Plot }) {
   return (
     <group position={[plot.x, 0, plot.z]} scale={lvlScale}>
       {id === 'garden' ? (
-        <Garden />
+        <Garden level={plot.level} />
       ) : id === 'cottage' ? (
         <Cottage c={c} />
       ) : id === 'bank' ? (
@@ -277,7 +278,23 @@ function CulturalHall({ c }: { c: Palette }) {
   );
 }
 
-function Garden() {
+// corn matures with the garden's level — real Kenney crop models
+const CORN_STAGES = [
+  '/models/nature/crops_cornStageB.glb',
+  '/models/nature/crops_cornStageC.glb',
+  '/models/nature/crops_cornStageD.glb',
+];
+
+function Garden({ level }: { level: number }) {
+  const gltf = useLoader(GLTFLoader, CORN_STAGES[Math.min(CORN_STAGES.length - 1, Math.max(0, level - 1))]);
+  const corn = useMemo(() => {
+    gltf.scene.traverse((o: THREE.Object3D) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) m.castShadow = true;
+    });
+    return gltf.scene;
+  }, [gltf]);
+
   return (
     <group>
       {/* beds */}
@@ -287,11 +304,8 @@ function Garden() {
             <boxGeometry args={[1.2, 0.24, 1.2]} />
             <meshStandardMaterial color="#5e4630" roughness={1} />
           </mesh>
-          {[[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3], [0, 0]].map(([px, pz], j) => (
-            <mesh key={j} position={[px, 0.36, pz]} castShadow>
-              <sphereGeometry args={[0.14, 6, 5]} />
-              <meshStandardMaterial color={j % 2 ? '#7fb069' : '#e8c33a'} roughness={0.8} />
-            </mesh>
+          {[[-0.3, -0.3], [0.3, 0.3], [0.32, -0.3], [-0.3, 0.32]].map(([px, pz], j) => (
+            <primitive key={j} object={corn.clone()} position={[px, 0.24, pz]} scale={0.55} rotation={[0, i + j, 0]} />
           ))}
         </group>
       ))}

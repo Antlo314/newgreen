@@ -153,8 +153,11 @@ export type PanelId =
   | 'build'
   | 'dialogue'
   | 'map'
+  | 'market'
   | 'help'
   | 'settings';
+
+export type MarketResource = 'wood' | 'stone' | 'clay' | 'goods';
 
 export interface DialogueState {
   npcId: string;

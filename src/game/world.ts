@@ -13,7 +13,7 @@ export const BRIDGE_Z = 2;
 export const BRIDGE_HALF_WIDTH = 2.6;
 
 // Mulberry32 — deterministic PRNG so the world is identical every session.
-function mulberry32(seed: number) {
+export function mulberry32(seed: number) {
   let a = seed >>> 0;
   return () => {
     a |= 0;

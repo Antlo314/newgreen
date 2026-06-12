@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useGame } from '../../../src/game/store';
 import { QUEST_BY_ID, xpForLevel } from '../../../src/game/data';
+import { deriveResidents } from '../../../src/game/residents';
 import Minimap from './Minimap';
 
 export default function HUD() {
@@ -41,6 +42,12 @@ function TopBar() {
   const wood = useGame((s) => s.wood);
   const stone = useGame((s) => s.stone);
   const clay = useGame((s) => s.clay);
+  const food = useGame((s) => s.food);
+  const goods = useGame((s) => s.goods);
+  const circulation = useGame((s) => s.circulation);
+  const townFed = useGame((s) => s.townFed);
+  const plots = useGame((s) => s.plots);
+  const population = useMemo(() => deriveResidents(plots).length, [plots]);
   const rep = useGame((s) => s.reputation);
   const level = useGame((s) => s.level);
   const xp = useGame((s) => s.xp);
@@ -64,7 +71,23 @@ function TopBar() {
       <StatPill icon="🪵" value={String(wood)} label="Lumber" color="#a87b4f" />
       <StatPill icon="🪨" value={String(stone)} label="Stone" color="#aeb6bf" />
       <StatPill icon="🧱" value={String(clay)} label="Clay" color="#c4663d" />
+      <StatPill
+        icon="🌾"
+        value={String(Math.floor(food))}
+        label={townFed ? 'Food — gardens feed your residents' : 'Food — GREENWOOD IS HUNGRY!'}
+        color={townFed ? '#a3d977' : '#f87171'}
+      />
+      {goods > 0 && <StatPill icon="📦" value={String(Math.floor(goods))} label="Crafted goods — sold by your commerce" color="#c9a227" />}
+      {population > 0 && <StatPill icon="👪" value={String(population)} label="Population — residents of Greenwood" color="#e8b4f8" />}
       <StatPill icon="✦" value={String(rep)} label="Reputation" color="#7dd3fc" />
+      {circulation > 1 && (
+        <StatPill
+          icon="⟳"
+          value={`×${circulation.toFixed(2)}`}
+          label="Circulation — every Greenwood hand the dollar passes through multiplies it"
+          color="#6ee7b7"
+        />
+      )}
 
       <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
         <div className="flex flex-col gap-1 rounded-lg border border-white/10 bg-black/55 px-2.5 py-1.5 backdrop-blur-sm">
@@ -233,9 +256,10 @@ function HotkeyBar() {
   const quests = useGame((s) => s.quests);
   const hasReady = Object.values(quests).some((q) => q.status === 'ready');
 
-  const items: { key: string; label: string; panel: 'quests' | 'inventory' | 'map' | 'help'; badge?: boolean }[] = [
+  const items: { key: string; label: string; panel: 'quests' | 'inventory' | 'map' | 'market' | 'help'; badge?: boolean }[] = [
     { key: 'Q', label: 'Quests', panel: 'quests', badge: hasReady },
     { key: 'I', label: 'Inventory', panel: 'inventory' },
+    { key: 'T', label: 'Market', panel: 'market' },
     { key: 'M', label: 'Map', panel: 'map' },
     { key: 'H', label: 'Help', panel: 'help' },
   ];

@@ -23,6 +23,7 @@ export default function Panels() {
       {panel === 'inventory' && <Modal title="Inventory & Stats"><Inventory /></Modal>}
       {panel === 'build' && <Modal title="Greenwood Land Office"><BuildMenu /></Modal>}
       {panel === 'map' && <Modal title="District Map"><MapPanel /></Modal>}
+      {panel === 'market' && <Modal title="Greenwood Exchange"><MarketPanel /></Modal>}
       {panel === 'help' && <Modal title="How to Play"><HelpPanel /></Modal>}
     </>
   );
@@ -312,6 +313,87 @@ function BuildMenu() {
 
 // ---------------------------------------------------------------------------
 
+const MARKET_ROWS: { type: 'wood' | 'stone' | 'clay' | 'goods'; icon: string; name: string; buyable: boolean }[] = [
+  { type: 'wood', icon: '🪵', name: 'Lumber', buyable: true },
+  { type: 'stone', icon: '🪨', name: 'Stone', buyable: true },
+  { type: 'clay', icon: '🧱', name: 'Clay', buyable: true },
+  { type: 'goods', icon: '📦', name: 'Goods', buyable: false },
+];
+
+function MarketPanel() {
+  const s = useGame();
+  const hasGrocery = s.plots.some((p) => p.building === 'grocery' && p.construction === 0);
+
+  if (!hasGrocery) {
+    return (
+      <div className="text-xs leading-relaxed text-white/60">
+        The exchange opens once Greenwood has a <span className="font-semibold text-amber-300">Grocery</span> to anchor
+        trade. Build one near the plaza, then come back with your harvest.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] leading-relaxed text-white/55">
+        Prices drift with every tick of the exchange. Sell high, buy what your build needs — every trade keeps the
+        dollar inside Greenwood.
+      </p>
+      {MARKET_ROWS.map(({ type, icon, name, buyable }) => {
+        const have = Math.floor(type === 'goods' ? s.goods : s[type]);
+        const price = s.marketPrices[type];
+        const buyPrice = Math.ceil(price * 1.25);
+        return (
+          <div key={type} className="rounded-xl border border-white/10 bg-white/5 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm">
+                {icon} <span className="font-semibold text-white">{name}</span>
+                <span className="ml-2 text-[11px] text-white/45">×{have}</span>
+              </span>
+              <span className="text-xs font-bold text-amber-300">◆{price.toFixed(1)}</span>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {[1, 10].map((qty) => (
+                <button
+                  key={`s${qty}`}
+                  disabled={have < qty}
+                  onClick={() => s.sellResource(type, qty)}
+                  className="rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-bold text-emerald-200 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  Sell {qty}
+                </button>
+              ))}
+              <button
+                disabled={have < 1}
+                onClick={() => s.sellResource(type, have)}
+                className="rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-bold text-emerald-200 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                Sell all
+              </button>
+              {buyable && (
+                <span className="ml-auto flex items-center gap-1.5">
+                  {[1, 10].map((qty) => (
+                    <button
+                      key={`b${qty}`}
+                      disabled={s.bswx < buyPrice * qty}
+                      onClick={() => s.buyResource(type as 'wood' | 'stone' | 'clay', qty)}
+                      className="rounded-lg border border-sky-400/40 bg-sky-400/10 px-2.5 py-1 text-[11px] font-bold text-sky-200 transition hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      Buy {qty} (◆{buyPrice * qty})
+                    </button>
+                  ))}
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 function MapPanel() {
   return (
     <div className="flex flex-col items-center gap-3">
@@ -347,9 +429,15 @@ function HelpPanel() {
         chop pines 🌲, mine quarry rock 🪨, dig riverbank clay 🧱, talk to townsfolk, or build on open plots.
         Harvesting costs stamina — it recovers when you rest.
       </Section>
-      <Section h="Economy">
-        Businesses generate <b>◆ BSWX</b> automatically. Cottages boost all income +10% each; gardens +5% and
-        reputation. Upgrade buildings up to level 3 for bigger returns.
+      <Section h="The Circulation Economy">
+        Greenwood prospers when the dollar stays home. <b>Gardens</b> grow 🌾 food; <b>cottages</b> bring residents who
+        eat it (a fed town earns more, a hungry one falters); the <b>grocery</b> sells the surplus; the{' '}
+        <b>workshop</b> crafts 📦 goods from spare lumber; the <b>Sugar Bowl, hotel, and Cultural Hall</b> sell those
+        goods. Every active link raises your <b>⟳ circulation multiplier</b> — and employed residents raise it further.
+      </Section>
+      <Section h="The Exchange">
+        Press <Kbd>T</Kbd> at any time (once a grocery is built) to trade lumber, stone, clay, and goods at prices that
+        drift every tick. Sell high, buy what the next build needs.
       </Section>
       <Section h="Quests">
         Blue markers = new quests. Gold markers = ready to turn in. Press <Kbd>Q</Kbd> for the quest log,{' '}

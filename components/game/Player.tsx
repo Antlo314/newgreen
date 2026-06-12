@@ -54,6 +54,8 @@ export default function Player() {
         s.setPanel(s.panel === 'inventory' ? null : 'inventory');
       } else if (k === 'm') {
         s.setPanel(s.panel === 'map' ? null : 'map');
+      } else if (k === 't') {
+        s.setPanel(s.panel === 'market' ? null : 'market');
       } else if (k === 'h') {
         s.setPanel(s.panel === 'help' ? null : 'help');
       }

@@ -351,4 +351,5 @@ export const RESOURCE_LABEL: Record<string, string> = {
   wood: 'Lumber',
   stone: 'Stone',
   clay: 'Clay',
+  goods: 'Goods',
 };
