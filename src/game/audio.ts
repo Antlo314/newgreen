@@ -20,6 +20,36 @@ export type SfxName =
 const MUSIC_VOL = 0.35;
 const FADE_MS = 1200;
 
+// Kenney CC0 sample files (public/sfx). Names not listed here stay synthesized.
+const SFX_FILES: Partial<Record<SfxName, string[]>> = {
+  chop: ['/sfx/impactWood_medium_000.ogg', '/sfx/impactWood_medium_001.ogg', '/sfx/impactWood_medium_002.ogg', '/sfx/chop.ogg'],
+  mine: ['/sfx/impactMining_000.ogg', '/sfx/impactMining_001.ogg', '/sfx/impactMining_002.ogg'],
+  dig: ['/sfx/impactSoft_heavy_000.ogg', '/sfx/impactSoft_heavy_001.ogg', '/sfx/impactSoft_heavy_002.ogg'],
+  build: ['/sfx/impactPlank_medium_000.ogg', '/sfx/impactPlank_medium_001.ogg', '/sfx/impactPlank_medium_002.ogg'],
+  footstep: ['/sfx/footstep_grass_000.ogg', '/sfx/footstep_grass_001.ogg', '/sfx/footstep_grass_002.ogg', '/sfx/footstep_grass_003.ogg', '/sfx/footstep_grass_004.ogg'],
+  ui: ['/sfx/click_001.ogg', '/sfx/click_002.ogg', '/sfx/click_003.ogg'],
+  error: ['/sfx/error_004.ogg'],
+  coin: ['/sfx/handleCoins.ogg', '/sfx/handleCoins2.ogg'],
+  questAccept: ['/sfx/confirmation_001.ogg'],
+  questReady: ['/sfx/confirmation_002.ogg'],
+  complete: ['/sfx/confirmation_003.ogg'],
+};
+
+// per-effect gain so foley sits right in the mix
+const SFX_VOL: Partial<Record<SfxName, number>> = {
+  footstep: 0.22,
+  ui: 0.3,
+  chop: 0.55,
+  mine: 0.55,
+  dig: 0.5,
+  build: 0.5,
+  coin: 0.4,
+  questAccept: 0.45,
+  questReady: 0.45,
+  complete: 0.5,
+  error: 0.4,
+};
+
 class AudioManager {
   private a: HTMLAudioElement | null = null;
   private b: HTMLAudioElement | null = null;
@@ -32,6 +62,7 @@ class AudioManager {
   private fadeRaf = 0;
   private jingle: HTMLAudioElement | null = null;
   private lastSfx: Record<string, number> = {};
+  private buffers = new Map<string, AudioBuffer>();
 
   /** Must be called from a user gesture (click/keydown) to satisfy autoplay policy. */
   unlock() {
@@ -52,6 +83,7 @@ class AudioManager {
     } catch {
       this.ctx = null;
     }
+    this.preloadSamples();
     if (this.currentUrl) {
       const url = this.currentUrl;
       this.currentUrl = null;
@@ -131,12 +163,50 @@ class AudioManager {
   // Synthesized SFX
   // -------------------------------------------------------------------
 
+  /** Fire-and-forget decode of all Kenney samples; failures fall back to synth. */
+  private preloadSamples() {
+    if (!this.ctx) return;
+    const urls = new Set<string>();
+    for (const list of Object.values(SFX_FILES)) for (const u of list) urls.add(u);
+    for (const url of urls) {
+      fetch(url)
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+        .then((ab) => this.ctx!.decodeAudioData(ab))
+        .then((buf) => this.buffers.set(url, buf))
+        .catch(() => {
+          /* missing/undecodable sample — synth fallback covers it */
+        });
+    }
+  }
+
+  /** Play a recorded sample with slight pitch variation. Returns false if unavailable. */
+  private playSample(name: SfxName): boolean {
+    if (!this.ctx || !this.sfxGain) return false;
+    const files = SFX_FILES[name];
+    if (!files) return false;
+    const loaded = files.filter((u) => this.buffers.has(u));
+    if (loaded.length === 0) return false;
+    const buf = this.buffers.get(loaded[Math.floor(Math.random() * loaded.length)])!;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = 0.94 + Math.random() * 0.12;
+    const g = this.ctx.createGain();
+    g.gain.value = SFX_VOL[name] ?? 0.4;
+    src.connect(g);
+    g.connect(this.sfxGain);
+    src.start();
+    return true;
+  }
+
   sfx(name: SfxName) {
     if (!this.ctx || !this.sfxGain || this.muted) return;
     const now = performance.now();
     // rate-limit identical sfx to avoid machine-gunning
     if (now - (this.lastSfx[name] ?? 0) < 70) return;
     this.lastSfx[name] = now;
+
+    if (this.playSample(name)) return;
+
     const t = this.ctx.currentTime;
 
     switch (name) {
