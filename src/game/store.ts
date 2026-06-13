@@ -81,7 +81,10 @@ const INCOME_SCALE = 0.72;
 // stamina is a real resource — walking burns it, rest restores it (faster at
 // night). Run yourself ragged and you trudge until you rest or grab a bite.
 const MOVE_DRAIN = 1.5; // stamina per second while on the move
-const IDLE_REGEN = 7; // stamina per second while standing still
+// rest restores ~5/s — slow enough that harvesting (which holds you still) is
+// roughly stamina-neutral rather than a free refill, so a real rest or a
+// provision matters. Recovery is notably quicker after dark.
+const IDLE_REGEN = 5; // stamina per second while standing still
 const NIGHT_REGEN_MULT = 1.6; // you recover quicker after dark
 const SPRINT_DRAIN_MULT = 2.2; // sprinting burns stamina faster
 
