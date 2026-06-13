@@ -16,6 +16,9 @@ export type SfxName =
   | 'questReady'
   | 'footstep'
   | 'crit'
+  | 'synergy'
+  | 'festival'
+  | 'fanfare'
   | 'error';
 
 const MUSIC_VOL = 0.35;
@@ -260,6 +263,25 @@ class AudioManager {
         this.blip(784, 0.07, 'triangle', 0.22, t);
         this.blip(1047, 0.07, 'triangle', 0.22, t + 0.05);
         this.blip(1568, 0.16, 'sine', 0.24, t + 0.1);
+        break;
+      case 'synergy':
+        // soft two-note "click into place" when a build lands a neighbor bonus
+        this.blip(659, 0.07, 'sine', 0.16, t);
+        this.blip(988, 0.12, 'sine', 0.18, t + 0.06);
+        break;
+      case 'festival':
+        // bright celebratory run
+        this.blip(523, 0.1, 'triangle', 0.22, t);
+        this.blip(659, 0.1, 'triangle', 0.22, t + 0.09);
+        this.blip(784, 0.1, 'triangle', 0.24, t + 0.18);
+        this.blip(1047, 0.22, 'sine', 0.26, t + 0.27);
+        break;
+      case 'fanfare':
+        // a founder arrives — a warm rising triad
+        this.blip(440, 0.14, 'triangle', 0.24, t);
+        this.blip(554, 0.14, 'triangle', 0.24, t + 0.12);
+        this.blip(659, 0.14, 'triangle', 0.26, t + 0.24);
+        this.blip(880, 0.28, 'sine', 0.28, t + 0.36);
         break;
       case 'error':
         this.blip(160, 0.15, 'sawtooth', 0.18, t);

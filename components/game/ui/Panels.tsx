@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useGame } from '../../../src/game/store';
+import { BANK_LOAN_TIERS, useGame } from '../../../src/game/store';
 import {
   adjacencyInfo,
   boonActive,
@@ -42,6 +42,7 @@ export default function Panels() {
       {panel === 'charter' && <Modal title="Charter a New District"><CharterPanel /></Modal>}
       {panel === 'civic' && <Modal title="Town Improvements"><CivicPanel /></Modal>}
       {panel === 'labor' && <Modal title="Labor Office"><LaborPanel /></Modal>}
+      {panel === 'bank' && <Modal title="Strap & Lock Safe Bank"><BankPanel /></Modal>}
       {panel === 'help' && <Modal title="How to Play"><HelpPanel /></Modal>}
     </>
   );
@@ -384,6 +385,27 @@ function BuildMenu() {
             </div>
           )}
         </div>
+        {plot.building === 'bank' && (
+          <button
+            onClick={() => s.setPanel('bank')}
+            className="w-full rounded-lg border border-sky-400/40 bg-sky-500/10 px-3 py-2 text-[11px] font-bold text-sky-200 transition hover:bg-sky-500/20"
+          >
+            🏦 Bank Services — savings &amp; fair loans
+          </button>
+        )}
+        {plot.building === 'cultural_hall' && (
+          <button
+            onClick={() => s.hostFestival()}
+            disabled={s.festivalCooldown > 0 || s.bswx < 150}
+            className={`w-full rounded-lg border px-3 py-2 text-[11px] font-bold transition ${
+              s.festivalCooldown > 0 || s.bswx < 150
+                ? 'cursor-not-allowed border-white/10 bg-white/5 text-white/35'
+                : 'border-fuchsia-400/50 bg-fuchsia-500/15 text-fuchsia-100 hover:bg-fuchsia-500/25'
+            }`}
+          >
+            {s.festivalCooldown > 0 ? `🎉 Festival recovering (${Math.ceil(s.festivalCooldown)}s)` : '🎉 Host a Festival — ◆150'}
+          </button>
+        )}
         {canUpgrade ? (
           <button
             onClick={() => s.upgradePlot(plot.id)}
@@ -833,6 +855,95 @@ function BoardPanel() {
   );
 }
 
+function BankPanel() {
+  const s = useGame();
+  const bankLevels = s.plots.reduce(
+    (sum, p) => (p.building === 'bank' && p.construction === 0 ? sum + p.level : sum),
+    0
+  );
+  const hasBank = bankLevels > 0;
+  const rate = Math.min(0.07, 0.03 + Math.max(0, bankLevels - 1) * 0.01); // mirrors store
+  const loan = s.loan;
+  const depositBtn = 'rounded-lg border border-sky-400/40 bg-sky-400/10 px-2.5 py-1 text-[11px] font-bold text-sky-200 transition hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-30';
+  const drawBtn = 'rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-bold text-emerald-200 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-30';
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-sky-400/30 bg-sky-400/5 p-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-bold text-white">Community Savings</span>
+          <span className="text-lg font-extrabold text-sky-200">◆{Math.floor(s.savings).toLocaleString()}</span>
+        </div>
+        <div className="mt-0.5 text-[10px] text-white/55">
+          {hasBank ? `Earns ${Math.round(rate * 100)}% interest every dawn.` : 'Build & operate a bank to earn interest on deposits.'}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {[50, 100].map((a) => (
+            <button key={`d${a}`} disabled={s.bswx < a} onClick={() => s.deposit(a)} className={depositBtn}>
+              Deposit ◆{a}
+            </button>
+          ))}
+          <button disabled={s.bswx < 1} onClick={() => s.deposit(Math.floor(s.bswx))} className={depositBtn}>
+            Deposit all
+          </button>
+          {[50, 100].map((a) => (
+            <button key={`w${a}`} disabled={s.savings < a} onClick={() => s.withdraw(a)} className={drawBtn}>
+              Withdraw ◆{a}
+            </button>
+          ))}
+          <button disabled={s.savings < 1} onClick={() => s.withdraw(Math.floor(s.savings))} className={drawBtn}>
+            Withdraw all
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-white/50">Fair Loans</h3>
+        {loan ? (
+          <div className="space-y-2">
+            <div className="rounded-lg border border-amber-400/30 bg-amber-400/5 p-2.5 text-[11px] text-white/70">
+              You owe <span className="font-bold text-amber-300">◆{loan.owed}</span> (due day {loan.dueDay}).
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {[50, 100].map((a) => (
+                <button key={a} disabled={s.bswx < 1} onClick={() => s.repayLoan(a)} className={drawBtn}>
+                  Repay ◆{a}
+                </button>
+              ))}
+              <button disabled={s.bswx < 1} onClick={() => s.repayLoan(loan.owed)} className={drawBtn}>
+                Pay in full
+              </button>
+            </div>
+          </div>
+        ) : !hasBank ? (
+          <div className="text-[11px] text-white/50">Operate a bank to borrow on fair, honest terms.</div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-[11px] leading-relaxed text-white/55">
+              Honest rates — far gentler than the back-alley shark.
+            </p>
+            {BANK_LOAN_TIERS.map((t, i) => {
+              const owed = Math.round(t.principal * (1 + t.rate));
+              return (
+                <button
+                  key={i}
+                  onClick={() => s.takeBankLoan(i)}
+                  className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 p-3 text-left transition hover:border-sky-400/50 hover:bg-sky-400/10"
+                >
+                  <div>
+                    <div className="text-sm font-bold text-white">Borrow ◆{t.principal}</div>
+                    <div className="text-[10px] text-white/55">Repay ◆{owed} within {t.days} days</div>
+                  </div>
+                  <span className="text-[11px] font-bold text-sky-300">+{Math.round(t.rate * 100)}%</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function LaborPanel() {
   const s = useGame();
   const population = deriveResidents(s.plots).length;
@@ -997,16 +1108,42 @@ function CharterPanel() {
 // ---------------------------------------------------------------------------
 
 function MapPanel() {
+  const s = useGame();
+  const buildings = s.plots.filter((p) => p.building && p.construction === 0);
+  const travel = (x: number, z: number) => {
+    s.setPanel(null);
+    useGame.setState({ teleportTarget: { x, z }, moveTarget: null, harvesting: null });
+  };
   return (
     <div className="flex flex-col items-center gap-3">
       <Minimap size={300} />
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-white/70">
         <span>⬤ <span className="text-white">You</span></span>
-        <span className="text-sky-300">⬤ Townsfolk</span>
+        <span className="text-sky-300">⬤ Founders</span>
         <span className="text-green-900">■ Forest (lumber)</span>
         <span className="text-gray-300">■ Quarry (stone)</span>
         <span className="text-orange-400">■ Riverbank (clay)</span>
         <span className="text-amber-300">■ Buildings / plots</span>
+      </div>
+      <div className="w-full border-t border-white/10 pt-2">
+        <h3 className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-white/50">Fast Travel</h3>
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => travel(0, 6)}
+            className="rounded-lg border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 text-[11px] font-bold text-amber-200 transition hover:bg-amber-400/20"
+          >
+            ⌂ Town Square
+          </button>
+          {buildings.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => travel(p.x, p.z + 2.6)}
+              className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1 text-[11px] font-semibold text-white/80 transition hover:bg-white/10"
+            >
+              {BUILDINGS[p.building!].name}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1025,6 +1162,7 @@ function HelpPanel() {
       <Section h="Movement">
         <Kbd>WASD</Kbd> or arrow keys to walk. You can also <b>click / tap the ground</b> to move there. Mouse wheel
         zooms the camera. Hold <Kbd>Shift</Kbd> to <b>sprint</b> — quicker on your feet, but it burns stamina faster.
+        Open the <Kbd>M</Kbd> Map to <b>fast-travel</b> to the plaza or any of your buildings.
       </Section>
       <Section h="Interacting">
         Walk up to anything highlighted with a golden ring and press <Kbd>E</Kbd> (or tap the action button on mobile):
@@ -1105,6 +1243,11 @@ function HelpPanel() {
         to gather lumber, stone, or clay each tick. They&apos;re paid the market rate (cheaper than buying, no trip
         required), so as your town grows you can trade BSWX for a steady flow of materials instead of harvesting every
         load by hand.
+      </Section>
+      <Section h="Banking &amp; Festivals">
+        Walk up to your <b>Bank</b> and open <b>Bank Services</b> to deposit savings (they earn interest every dawn) or
+        borrow at fair rates — a world apart from the loan shark. At the <b>Cultural Hall</b>, spend BSWX to{' '}
+        <b>host a festival</b> for a burst of income and reputation (with a cooldown between celebrations).
       </Section>
       <Section h="Town Goals">
         Beyond the story, there&apos;s always a <b>🎯 Town Goal</b> on screen — grow your population, reputation, and

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { useGame } from '../../../src/game/store';
-import { NPCS } from '../../../src/game/data';
+import { NPCS, npcRevealed, QUEST_BY_ID } from '../../../src/game/data';
 import { BRIDGE_Z, RIVER_WIDTH, RIVER_X, WORLD_HALF } from '../../../src/game/world';
 
 // Canvas-based minimap. Redraws ~5x/sec — cheap.
@@ -66,13 +66,22 @@ export default function Minimap({ size = 148 }: { size?: number }) {
         }
       }
 
-      // npcs
+      // founders (only those revealed) — the tracked quest giver gets a ring
+      const trackedGiver = s.trackedQuest ? QUEST_BY_ID[s.trackedQuest]?.giver : null;
       for (const npc of NPCS) {
+        if (!npcRevealed(npc.id, s.quests)) continue;
         const [x, z] = toMap(npc.x, npc.z);
         ctx.fillStyle = '#7dd3fc';
         ctx.beginPath();
         ctx.arc(x, z, 2.4, 0, Math.PI * 2);
         ctx.fill();
+        if (npc.id === trackedGiver) {
+          ctx.strokeStyle = '#ffd54f';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(x, z, 4.5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
       }
 
       // player

@@ -197,6 +197,7 @@ export type PanelId =
   | 'charter'
   | 'civic'
   | 'labor'
+  | 'bank'
   | 'help'
   | 'settings';
 

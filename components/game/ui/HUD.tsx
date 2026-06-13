@@ -26,6 +26,23 @@ export default function HUD() {
       <HotkeyBar />
       <MobileControls />
       <WelcomeBackModal />
+      <FounderArrival />
+    </div>
+  );
+}
+
+// Brief celebratory banner when a new founder joins the town.
+function FounderArrival() {
+  const fa = useGame((s) => s.founderArrival);
+  if (!fa) return null;
+  return (
+    <div className="pointer-events-none absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2">
+      <div className="animate-scaleIn rounded-2xl border border-amber-300/40 bg-[#161310]/90 px-7 py-4 text-center shadow-2xl backdrop-blur-sm">
+        <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-amber-300/80">✦ A Founder Arrives ✦</div>
+        <div className="mt-1.5 text-xl font-extrabold text-amber-100">{fa.name}</div>
+        <div className="text-[11px] uppercase tracking-wider text-white/55">{fa.title}</div>
+        <div className="mt-1.5 text-[11px] text-white/70">Seek them out in New Greenwood.</div>
+      </div>
     </div>
   );
 }

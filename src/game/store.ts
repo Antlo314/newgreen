@@ -49,6 +49,7 @@ import type {
   InteractTarget,
   LegacyState,
   LoanState,
+  LoanTier,
   ResidentRequest,
   MarketResource,
   MerchantDeal,
@@ -167,6 +168,22 @@ const FORTUNE_MAX_DUR = 70;
 // loan shark
 const LOAN_OVERDUE_GROWTH = 1.12; // debt grows this much each overdue day
 
+// the bank — community savings earn interest each dawn (better with more/higher
+// banks), and it lends at far fairer terms than the back-alley shark.
+const BANK_BASE_RATE = 0.03; // daily interest with one level-1 bank
+const BANK_RATE_PER_LEVEL = 0.01; // +per extra bank level
+const BANK_RATE_CAP = 0.07;
+export const BANK_LOAN_TIERS: LoanTier[] = [
+  { principal: 150, rate: 0.08, days: 4 },
+  { principal: 400, rate: 0.12, days: 6 },
+  { principal: 900, rate: 0.18, days: 8 },
+];
+
+// player-hosted festivals at the Cultural Hall — pay for a guaranteed good spell
+const FESTIVAL_COST = 150;
+const FESTIVAL_DURATION = 60; // seconds the festival runs
+const FESTIVAL_COOLDOWN = 220; // seconds before you can throw another
+
 // prestige
 const LEGACY_PER_TOKEN = 0.08; // +8% to all income per legacy token
 
@@ -273,6 +290,12 @@ interface GameState {
   welcomeBack: WelcomeBack | null;
   harvestPop: HarvestPop | null;
   combo: number;
+  /** brief banner when a new founder arrives in town (auto-clears) */
+  founderArrival: { name: string; title: string } | null;
+
+  // the bank: community savings, and a festival cooldown timer
+  savings: number;
+  festivalCooldown: number;
 
   // strangers in town & town-wide fortunes
   merchant: MerchantState | null;
@@ -336,7 +359,11 @@ interface GameState {
   inspectDeal: (dealId: number) => void;
   buyDeal: (dealId: number) => void;
   takeLoan: (tierIndex: number) => void;
+  takeBankLoan: (tierIndex: number) => void;
   repayLoan: (amount: number) => void;
+  deposit: (amount: number) => void;
+  withdraw: (amount: number) => void;
+  hostFestival: () => void;
   acceptBuyout: () => void;
   declineBuyout: () => void;
   fulfillRequest: (id: number) => void;
@@ -379,6 +406,9 @@ function freshPlayerState() {
     skills: emptySkills(),
     civics: emptyCivics(),
     labor: { wood: 0, stone: 0, clay: 0 } as LaborAssignment,
+    savings: 0,
+    festivalCooldown: 0,
+    founderArrival: null as { name: string; title: string } | null,
     nodes: generateResourceNodes(),
     nodesVersion: 0,
     plots: [] as Plot[],
@@ -822,7 +852,13 @@ export const useGame = create<GameState>((set, get) => {
       }
 
       set({ timeOfDay, day, stamina, nodes, nodesVersion, plots });
-      if (dayRolled) processLoanDay(day);
+      if (dayRolled) {
+        processLoanDay(day);
+        processBankInterest();
+      }
+      if (state.festivalCooldown > 0) {
+        set({ festivalCooldown: Math.max(0, get().festivalCooldown - dt) });
+      }
 
       for (const p of finishing) {
         const cfg = BUILDINGS[p.building!];
@@ -1348,6 +1384,7 @@ export const useGame = create<GameState>((set, get) => {
         placing: null,
       });
       audio.sfx('build');
+      if (adjacencyInfo(pl.buildingId, pl.x, pl.z, s.plots).bonus > 0) audio.sfx('synergy');
       get().addToast(`Construction started: ${cfg.name}`, 'info', '⚒');
     },
 
@@ -1575,6 +1612,78 @@ export const useGame = create<GameState>((set, get) => {
       get().save();
     },
 
+    takeBankLoan: (tierIndex) => {
+      const s = get();
+      if (s.loan) {
+        get().addToast('Settle your current debt before borrowing more.', 'warn', '!');
+        return;
+      }
+      if (!s.plots.some((p) => p.building === 'bank' && p.construction === 0)) {
+        get().addToast('Build the Strap & Lock Safe Bank to borrow on fair terms.', 'warn', '🏦');
+        return;
+      }
+      const tier = BANK_LOAN_TIERS[tierIndex];
+      if (!tier) return;
+      const owed = Math.round(tier.principal * (1 + tier.rate));
+      set({
+        bswx: s.bswx + tier.principal,
+        loan: { principal: tier.principal, owed, dueDay: s.day + tier.days, overdue: false },
+        panel: null,
+      });
+      audio.sfx('coin');
+      get().addToast(`Borrowed ◆${tier.principal} from the bank. Repay ◆${owed} by day ${s.day + tier.days}.`, 'info', '🏦');
+      get().save();
+    },
+
+    deposit: (amount) => {
+      const s = get();
+      const amt = Math.min(amount, Math.floor(s.bswx));
+      if (amt <= 0) return;
+      set({ bswx: s.bswx - amt, savings: s.savings + amt });
+      audio.sfx('coin');
+      get().addToast(`Deposited ◆${amt} into the bank.`, 'info', '🏦');
+      get().save();
+    },
+
+    withdraw: (amount) => {
+      const s = get();
+      const amt = Math.min(amount, Math.floor(s.savings));
+      if (amt <= 0) return;
+      set({ savings: s.savings - amt, bswx: s.bswx + amt });
+      audio.sfx('coin');
+      get().addToast(`Withdrew ◆${amt} from the bank.`, 'info', '🏦');
+      get().save();
+    },
+
+    hostFestival: () => {
+      const s = get();
+      if (!s.plots.some((p) => p.building === 'cultural_hall' && p.construction === 0)) {
+        get().addToast('Raise the Legacy Cultural Hall to host festivals.', 'warn', '🎉');
+        return;
+      }
+      if (s.festivalCooldown > 0) {
+        get().addToast('The town is still catching its breath from the last festival.', 'warn', '🎉');
+        return;
+      }
+      if (s.bswx < FESTIVAL_COST) {
+        get().addToast('Not enough BSWX to throw a festival.', 'warn', '!');
+        audio.sfx('error');
+        return;
+      }
+      const tmpl = FORTUNES.find((f) => f.kind === 'festival');
+      if (!tmpl) return;
+      set({
+        bswx: s.bswx - FESTIVAL_COST,
+        fortune: { ...tmpl, timeLeft: FESTIVAL_DURATION, duration: FESTIVAL_DURATION },
+        festivalCooldown: FESTIVAL_COOLDOWN,
+        panel: null,
+      });
+      audio.sfx('festival');
+      audio.playLevelUp();
+      get().addToast('You throw open the doors — a Greenwood Festival begins!', 'reward', '🎉');
+      get().save();
+    },
+
     repayLoan: (amount) => {
       const s = get();
       const loan = s.loan;
@@ -1735,6 +1844,7 @@ export const useGame = create<GameState>((set, get) => {
           stamina: s.stamina, staminaMax: s.staminaMax,
           reputation: s.reputation, level: s.level, xp: s.xp, totalEarned: s.totalEarned,
           skillPoints: s.skillPoints, skills: s.skills, civics: s.civics, labor: s.labor,
+          savings: s.savings,
           timeOfDay: s.timeOfDay, day: s.day,
           quests: s.quests, trackedQuest: s.trackedQuest,
           plots: s.plots,
@@ -1773,6 +1883,12 @@ export const useGame = create<GameState>((set, get) => {
     for (const npc of NPCS) {
       if (npc.reveal === id) {
         get().addToast(`${npc.name} has arrived in New Greenwood — seek them out.`, 'quest', '✦');
+        set({ founderArrival: { name: npc.name, title: npc.title } });
+        audio.sfx('fanfare');
+        const who = npc.name;
+        setTimeout(() => {
+          if (get().founderArrival?.name === who) set({ founderArrival: null });
+        }, 5200);
       }
     }
 
@@ -2023,6 +2139,22 @@ export const useGame = create<GameState>((set, get) => {
     }
   }
 
+  /** Pay daily interest on bank savings — needs an operational bank to earn. */
+  function processBankInterest() {
+    const s = get();
+    if (s.savings <= 0) return;
+    const bankLevels = s.plots.reduce(
+      (sum, p) => (p.building === 'bank' && p.construction === 0 ? sum + p.level : sum),
+      0
+    );
+    if (bankLevels <= 0) return;
+    const rate = Math.min(BANK_RATE_CAP, BANK_BASE_RATE + (bankLevels - 1) * BANK_RATE_PER_LEVEL);
+    const interest = Math.floor(s.savings * rate);
+    if (interest <= 0) return;
+    set({ savings: s.savings + interest });
+    get().addToast(`Bank savings earned ◆${interest} in interest.`, 'reward', '🏦');
+  }
+
   /** Legacy tokens a charter would award right now, from accumulated progress. */
   function computeCharterTokens(s: GameState): number {
     const pop = deriveResidents(s.plots).length;
@@ -2146,6 +2278,8 @@ function loadSave(): Partial<GameState> | null {
       skills: { ...emptySkills(), ...(data.skills ?? {}) },
       civics,
       labor: { wood: 0, stone: 0, clay: 0, ...(data.labor ?? {}) },
+      savings: data.savings ?? 0,
+      festivalCooldown: 0,
       sprinting: false,
       timeOfDay: data.timeOfDay ?? 0.32,
       day: data.day ?? 1,
