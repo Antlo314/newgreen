@@ -6,7 +6,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import { useGame } from '../../src/game/store';
 import { audio } from '../../src/game/audio';
+import { Building } from './Buildings';
 import { BUILDINGS } from '../../src/game/data';
+import type { Plot } from '../../src/game/types';
 import {
   BRIDGE_HALF_WIDTH,
   BRIDGE_Z,
@@ -121,9 +123,12 @@ function Ground() {
     audio.unlock();
     const s = useGame.getState();
     if (s.phase !== 'playing' || s.dialogue) return;
-    // while placing a building, a ground tap aims the ghost (doesn't move you)
+    // while placing a building, a ground tap aims the ghost — and builds there
+    // immediately if the cell is valid (city-builder "click to place")
     if (s.placing) {
       s.movePlacing(e.point.x, e.point.z);
+      const pl = useGame.getState().placing;
+      if (pl?.valid) useGame.getState().confirmPlacing();
       return;
     }
     s.setMoveTarget({ x: e.point.x, z: e.point.z });
@@ -176,25 +181,38 @@ function PlacementGhost() {
     if (!ref.current || !pl) return;
     ref.current.position.set(pl.x, 0, pl.z);
     ref.current.rotation.y = pl.rot;
-    ref.current.scale.setScalar(1 + Math.sin(state.clock.elapsedTime * 4) * 0.03);
+    ref.current.scale.setScalar(1 + Math.sin(state.clock.elapsedTime * 5) * 0.025);
   });
+
+  // a synthetic plot so the ghost shows the ACTUAL building model
+  const buildingId = placing?.buildingId ?? 'cottage';
+  const ghostPlot = useMemo<Plot>(
+    () => ({ id: 'ghost', x: 0, z: 0, building: buildingId, level: 1, construction: 0, rot: 0 }),
+    [buildingId]
+  );
+
   if (!placing) return null;
   const fp = BUILDINGS[placing.buildingId].footprint;
-  const color = placing.valid ? '#6ee7b7' : '#f87171';
+  const color = placing.valid ? '#34d399' : '#f87171';
   return (
     <group ref={ref} position={[placing.x, 0, placing.z]} rotation={[0, placing.rot, 0]}>
-      <mesh position={[0, 1, 0]}>
-        <boxGeometry args={[fp, 2, fp * 0.85]} />
-        <meshBasicMaterial color={color} transparent opacity={0.32} depthWrite={false} />
-      </mesh>
+      {/* live preview of the real building */}
+      <Building plot={ghostPlot} />
+      {/* red veil over the footprint when the cell is blocked */}
+      {!placing.valid && (
+        <mesh position={[0, 1.4, 0]}>
+          <boxGeometry args={[fp + 0.5, 3, fp * 0.9 + 0.5]} />
+          <meshBasicMaterial color="#f87171" transparent opacity={0.32} depthWrite={false} />
+        </mesh>
+      )}
       {/* square footprint ring on the cell */}
-      <mesh rotation={[-Math.PI / 2, Math.PI / 4, 0]} position={[0, 0.07, 0]}>
-        <ringGeometry args={[fp * 0.62, fp * 0.62 + 0.22, 4]} />
-        <meshBasicMaterial color={color} transparent opacity={0.85} depthWrite={false} />
+      <mesh rotation={[-Math.PI / 2, Math.PI / 4, 0]} position={[0, 0.08, 0]}>
+        <ringGeometry args={[fp * 0.66, fp * 0.66 + 0.22, 4]} />
+        <meshBasicMaterial color={color} transparent opacity={0.9} depthWrite={false} />
       </mesh>
       {/* arrow marking the building's front (faces -z by default) */}
-      <mesh position={[0, 0.12, -fp * 0.62]} rotation={[-Math.PI / 2, 0, 0]}>
-        <coneGeometry args={[0.38, 0.7, 3]} />
+      <mesh position={[0, 0.12, -fp * 0.66]} rotation={[-Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[0.34, 0.6, 3]} />
         <meshBasicMaterial color={color} transparent opacity={0.95} depthWrite={false} />
       </mesh>
     </group>

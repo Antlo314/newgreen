@@ -74,7 +74,7 @@ const WALL: Record<BuildingId, { wall: string; roof: string; trim: string }> = {
   garden: { wall: '#7fb069', roof: '#7fb069', trim: '#5a8049' },
 };
 
-function Building({ plot }: { plot: Plot }) {
+export function Building({ plot }: { plot: Plot }) {
   const id = plot.building!;
   const c = WALL[id];
   const lvlScale = 1 + (plot.level - 1) * 0.12;
@@ -257,6 +257,8 @@ const CORN_STAGES = [
   '/models/nature/crops_cornStageC.glb',
   '/models/nature/crops_cornStageD.glb',
 ];
+// preload so the placement ghost for a garden never suspends the whole scene
+for (const u of CORN_STAGES) useLoader.preload(GLTFLoader, u);
 
 function Garden({ level }: { level: number }) {
   const gltf = useLoader(GLTFLoader, CORN_STAGES[Math.min(CORN_STAGES.length - 1, Math.max(0, level - 1))]);
