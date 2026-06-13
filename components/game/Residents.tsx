@@ -33,6 +33,7 @@ function isNight(t: number) {
 function ResidentActor({ r }: { r: Resident }) {
   const group = useRef<THREE.Group>(null);
   const walkRef = useRef<WalkRef>({ speed: 0 });
+  const friend = useGame((s) => (s.relationships[r.id] ?? 0) >= 3);
   const target = useRef<{ x: number; z: number } | null>(null);
   const pauseUntil = useRef(r.seed * 6);
   const clock = useRef(0);
@@ -108,6 +109,12 @@ function ResidentActor({ r }: { r: Resident }) {
   return (
     <group ref={group} position={[r.home.x + 1.6, 0, r.home.z + 1.6]}>
       <SkinnedCharacter appearance={r.appearance} walkRef={walkRef} scale={0.92} />
+      {friend && (
+        <mesh position={[0, 2.15, 0]} rotation={[0, 0, Math.PI / 4]}>
+          <octahedronGeometry args={[0.12, 0]} />
+          <meshBasicMaterial color="#f472b6" />
+        </mesh>
+      )}
     </group>
   );
 }

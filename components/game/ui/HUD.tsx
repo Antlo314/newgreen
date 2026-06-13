@@ -52,6 +52,7 @@ function TopBar() {
   const food = useGame((s) => s.food);
   const goods = useGame((s) => s.goods);
   const circulation = useGame((s) => s.circulation);
+  const legacy = useGame((s) => s.legacy);
   const townFed = useGame((s) => s.townFed);
   const plots = useGame((s) => s.plots);
   const population = useMemo(() => deriveResidents(plots).length, [plots]);
@@ -93,6 +94,14 @@ function TopBar() {
           value={`×${circulation.toFixed(2)}`}
           label="Circulation — every Greenwood hand the dollar passes through multiplies it"
           color="#6ee7b7"
+        />
+      )}
+      {(legacy.tokens > 0 || legacy.district > 1) && (
+        <StatPill
+          icon="🏙"
+          value={`D${legacy.district}${legacy.tokens > 0 ? ` ✦+${Math.round(legacy.tokens * 8)}%` : ''}`}
+          label="District & permanent Legacy income bonus"
+          color="#f0b429"
         />
       )}
 
@@ -317,9 +326,13 @@ function MobileControls() {
             ? '💬'
             : target.verb === 'Collect'
               ? '⚡'
-              : target.verb === 'Build' || target.verb === 'Manage'
-                ? '⚒️'
-                : '✊'}
+              : target.verb === 'Read'
+                ? '📋'
+                : target.verb === 'Trade'
+                  ? '🛒'
+                  : target.verb === 'Build' || target.verb === 'Manage'
+                    ? '⚒️'
+                    : '✊'}
         </button>
       )}
     </div>

@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { WalkRef } from './Humanoid';
 import SkinnedCharacter from './SkinnedCharacter';
 import { useGame } from '../../src/game/store';
-import { BUILDINGS, LENDER_POS, NPCS, npcSpot, QUESTS, RESOURCE_LABEL } from '../../src/game/data';
+import { BOARD_POS, BUILDINGS, LENDER_POS, NPCS, npcSpot, QUESTS, RESOURCE_LABEL } from '../../src/game/data';
 
 const QUEST_GIVER: Record<string, string> = Object.fromEntries(
   QUESTS.map((q) => [q.id, q.giver])
@@ -340,6 +340,7 @@ function updateInteractTarget(x: number, z: number, s: GS) {
   // strangers in town — the loan shark (always), merchant & speculator (when present)
   const strangers: InteractTarget[] = [
     { kind: 'lender', id: 'lender', label: 'the Loan Shark', verb: 'Talk', x: LENDER_POS.x, z: LENDER_POS.z },
+    { kind: 'board', id: 'board', label: 'the Community Board', verb: 'Read', x: BOARD_POS.x, z: BOARD_POS.z },
   ];
   if (s.merchant)
     strangers.push({ kind: 'merchant', id: 'merchant', label: `${s.merchant.name} — Traveling Merchant`, verb: 'Trade', x: s.merchant.x, z: s.merchant.z });

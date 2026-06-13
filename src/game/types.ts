@@ -175,6 +175,8 @@ export type PanelId =
   | 'merchant'
   | 'loan'
   | 'speculator'
+  | 'board'
+  | 'charter'
   | 'help'
   | 'settings';
 
@@ -197,7 +199,7 @@ export interface Toast {
 }
 
 export interface InteractTarget {
-  kind: 'node' | 'npc' | 'plot' | 'building' | 'event' | 'merchant' | 'lender' | 'speculator';
+  kind: 'node' | 'npc' | 'plot' | 'building' | 'event' | 'merchant' | 'lender' | 'speculator' | 'board';
   id: string;
   label: string;
   verb: string;
@@ -332,6 +334,27 @@ export interface TownGoal {
   label: string;
   /** rewards for completing this goal */
   reward: { bswx?: number; rep?: number; xp?: number };
+}
+
+// ---------------------------------------------------------------------------
+// Prestige (Charter a New District) & resident requests
+// ---------------------------------------------------------------------------
+
+export interface LegacyState {
+  /** permanent legacy tokens earned by chartering districts */
+  tokens: number;
+  /** which district you're building (1 = the first) */
+  district: number;
+}
+
+export interface ResidentRequest {
+  id: number;
+  residentId: string;
+  residentName: string;
+  kind: 'wood' | 'stone' | 'clay' | 'bswx';
+  amount: number;
+  rewardBswx: number;
+  rewardRep: number;
 }
 
 export type FortuneKind = 'festival' | 'boom' | 'panic' | 'blight';

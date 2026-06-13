@@ -10,9 +10,11 @@ import {
   PROVISIONS,
   QUESTS,
   QUEST_BY_ID,
+  RESOURCE_LABEL,
   UPGRADE_COST_MULT,
 } from '../../../src/game/data';
 import type { BuildingConfig, QuestDef } from '../../../src/game/types';
+import { deriveResidents } from '../../../src/game/residents';
 import Minimap from './Minimap';
 
 export default function Panels() {
@@ -29,6 +31,8 @@ export default function Panels() {
       {panel === 'merchant' && <Modal title="Traveling Merchant"><MerchantPanel /></Modal>}
       {panel === 'loan' && <Modal title="Back-Alley Lending"><LoanPanel /></Modal>}
       {panel === 'speculator' && <Modal title="An Outside Offer"><SpeculatorPanel /></Modal>}
+      {panel === 'board' && <Modal title="Community Board"><BoardPanel /></Modal>}
+      {panel === 'charter' && <Modal title="Charter a New District"><CharterPanel /></Modal>}
       {panel === 'help' && <Modal title="How to Play"><HelpPanel /></Modal>}
     </>
   );
@@ -186,8 +190,21 @@ function Inventory() {
           <Row k="Buildings" v={`${built.length}`} />
           <Row k="Passive income" v={`◆${income} / 5s (before bonuses)`} />
           <Row k="Harvest bonus" v={`+${Math.floor((s.level - 1) / 2)} per swing`} />
+          <Row k="District" v={`${s.legacy.district}`} />
+          {s.legacy.tokens > 0 && (
+            <Row k="Legacy bonus" v={`✦${s.legacy.tokens} · +${Math.round(s.legacy.tokens * 8)}% income`} />
+          )}
         </div>
       </div>
+
+      {s.quests['legacy_restored']?.status === 'done' && (
+        <button
+          onClick={() => s.setPanel('charter')}
+          className="w-full rounded-xl border border-amber-400/50 bg-amber-400/15 py-2.5 text-xs font-bold text-amber-100 transition hover:bg-amber-400/25"
+        >
+          🏙️ Charter a New District
+        </button>
+      )}
     </div>
   );
 }
@@ -617,6 +634,109 @@ function SpeculatorPanel() {
   );
 }
 
+function BoardPanel() {
+  const s = useGame();
+  const friends = Object.values(s.relationships).filter((v) => v >= 3).length;
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] leading-relaxed text-white/55">
+        Neighbors post what they need. Lend a hand for BSWX, reputation, and their friendship 💛.
+        {friends > 0 && (
+          <>
+            {' '}
+            You have <span className="font-semibold text-amber-200">{friends}</span> close{' '}
+            {friends === 1 ? 'friend' : 'friends'} in Greenwood.
+          </>
+        )}
+      </p>
+      {s.requests.length === 0 ? (
+        <div className="text-xs text-white/50">
+          The board is quiet for now. Residents post requests as the town grows — build cottages to bring more
+          neighbors.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {s.requests.map((r) => {
+            const icon = r.kind === 'wood' ? '🪵' : r.kind === 'stone' ? '🪨' : r.kind === 'clay' ? '🧱' : '◆';
+            const label = r.kind === 'bswx' ? 'BSWX' : RESOURCE_LABEL[r.kind];
+            const have = Math.floor(s[r.kind] as number);
+            const rel = s.relationships[r.residentId] ?? 0;
+            const can = have >= r.amount;
+            return (
+              <div key={r.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white">
+                    {r.residentName}
+                    {rel > 0 && <span className="ml-1 text-[10px] text-pink-300">{'❤'.repeat(Math.min(5, rel))}</span>}
+                  </span>
+                  <span className="text-[10px] text-amber-200">Reward: ◆{r.rewardBswx} · ✦{r.rewardRep}</span>
+                </div>
+                <div className="mt-0.5 text-[11px] text-white/65">
+                  Needs {icon} {r.amount} {label} <span className="text-white/40">(you have {have})</span>
+                </div>
+                <button
+                  disabled={!can}
+                  onClick={() => s.fulfillRequest(r.id)}
+                  className={`mt-2 w-full rounded-lg border px-3 py-1.5 text-[11px] font-bold transition ${
+                    can
+                      ? 'border-emerald-400/50 bg-emerald-400/15 text-emerald-200 hover:bg-emerald-400/25'
+                      : 'cursor-not-allowed border-white/10 bg-white/5 text-white/35'
+                  }`}
+                >
+                  {can ? `Give ${r.amount} ${label}` : `Need ${r.amount - have} more`}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CharterPanel() {
+  const s = useGame();
+  const eligible = s.quests['legacy_restored']?.status === 'done';
+  const pop = deriveResidents(s.plots).length;
+  const tokens = Math.max(
+    1,
+    Math.floor(s.totalEarned / 4000) + Math.floor(s.reputation / 40) + Math.floor(pop / 4)
+  );
+  const curMult = Math.round(s.legacy.tokens * 8);
+  const newMult = Math.round((s.legacy.tokens + tokens) * 8);
+  return (
+    <div className="space-y-3 text-center">
+      <div className="text-3xl">🏙️</div>
+      <p className="text-xs leading-relaxed text-white/75">
+        Greenwood stands restored. Charter a <b className="text-amber-200">new district</b> to begin again on fresh
+        ground — your buildings and wealth reset, but your <b>Legacy</b> carries forward as a permanent boost to all
+        income, forever.
+      </p>
+      <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 py-3">
+        <div className="text-[10px] uppercase tracking-wider text-amber-200/70">Legacy after chartering</div>
+        <div className="text-2xl font-extrabold text-amber-300">
+          ✦ {s.legacy.tokens + tokens} <span className="text-sm font-semibold text-amber-200">(+{tokens})</span>
+        </div>
+        <div className="text-[11px] text-white/60">
+          Income bonus: +{curMult}% → <span className="font-bold text-emerald-300">+{newMult}%</span>
+        </div>
+      </div>
+      {eligible ? (
+        <button
+          onClick={() => s.charterDistrict()}
+          className="w-full rounded-xl border border-amber-400/50 bg-amber-400/20 py-2.5 text-sm font-bold text-amber-100 transition hover:bg-amber-400/30 active:scale-95"
+        >
+          ✦ Charter District {s.legacy.district + 1} — resets your town
+        </button>
+      ) : (
+        <div className="text-[11px] text-white/50">
+          Complete the founding story (<span className="text-amber-300">A Legacy Restored</span>) to unlock chartering.
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 
 function MapPanel() {
@@ -697,6 +817,12 @@ function HelpPanel() {
       <Section h="Town Goals">
         Beyond the story, there&apos;s always a <b>🎯 Town Goal</b> on screen — grow your population, reputation, and
         earnings. Reach one and the next, bigger goal appears. Greenwood never stops growing.
+      </Section>
+      <Section h="Community & Legacy">
+        Help neighbors at the <b>📋 Community Board</b> by the plaza — fulfill their requests for BSWX, reputation, and
+        friendship 💛. Once you finish the founding story, open your <b>Inventory</b> to{' '}
+        <b>🏙️ Charter a New District</b>: reset the town for permanent <b>Legacy</b> income bonuses that stack with every
+        district you build.
       </Section>
       <Section h="Saving">Your progress autosaves every few seconds and when you return to the menu.</Section>
       <div className="pt-2.5 border-t border-white/10">

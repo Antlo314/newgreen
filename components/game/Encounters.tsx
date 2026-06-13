@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import SkinnedCharacter from './SkinnedCharacter';
 import { WalkRef } from './Humanoid';
 import { useGame } from '../../src/game/store';
-import { LENDER_POS } from '../../src/game/data';
+import { BOARD_POS, LENDER_POS } from '../../src/game/data';
 import { DEFAULT_APPEARANCE } from '../../src/game/customization';
 import type { PlayerAppearance } from '../../src/game/types';
 
@@ -55,8 +55,55 @@ export default function Encounters() {
   return (
     <group>
       <LoanShark />
+      <CommunityBoard />
       {merchant && <Merchant x={merchant.x} z={merchant.z} />}
       {speculatorOffer && <Speculator x={speculatorOffer.x} z={speculatorOffer.z} />}
+    </group>
+  );
+}
+
+// Community board near the plaza — residents pin requests here.
+function CommunityBoard() {
+  const marker = useRef<THREE.Mesh>(null);
+  useFrame((state) => {
+    if (!marker.current) return;
+    const n = useGame.getState().requests.length;
+    marker.current.visible = n > 0;
+    const t = state.clock.elapsedTime;
+    marker.current.position.y = 2 + Math.sin(t * 3) * 0.1;
+    marker.current.rotation.y = t * 1.5;
+  });
+  return (
+    <group position={[BOARD_POS.x, 0, BOARD_POS.z]} rotation={[0, Math.PI * 0.15, 0]}>
+      {/* posts */}
+      {[-0.7, 0.7].map((x) => (
+        <mesh key={x} position={[x, 0.7, 0]} castShadow>
+          <cylinderGeometry args={[0.07, 0.08, 1.4, 6]} />
+          <meshStandardMaterial color="#6e4a2f" roughness={0.9} />
+        </mesh>
+      ))}
+      {/* board */}
+      <mesh position={[0, 1.15, 0]} castShadow>
+        <boxGeometry args={[1.9, 1.1, 0.12]} />
+        <meshStandardMaterial color="#8a6b43" roughness={0.85} />
+      </mesh>
+      {/* little roof */}
+      <mesh position={[0, 1.78, 0]} rotation={[0, Math.PI / 4, 0]} castShadow>
+        <coneGeometry args={[1.1, 0.4, 4]} />
+        <meshStandardMaterial color="#5a3b24" roughness={0.9} />
+      </mesh>
+      {/* pinned papers */}
+      {[-0.5, 0.05, 0.55].map((x, i) => (
+        <mesh key={i} position={[x, 1.15 + (i % 2) * 0.18 - 0.1, 0.07]} rotation={[0, 0, (i - 1) * 0.08]}>
+          <planeGeometry args={[0.42, 0.5]} />
+          <meshStandardMaterial color="#efe6d2" roughness={0.9} />
+        </mesh>
+      ))}
+      {/* "has requests" beacon */}
+      <mesh ref={marker} position={[0, 2, 0]} visible={false}>
+        <octahedronGeometry args={[0.16, 0]} />
+        <meshBasicMaterial color="#f0b429" />
+      </mesh>
     </group>
   );
 }

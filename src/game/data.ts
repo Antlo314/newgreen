@@ -442,6 +442,8 @@ export const LENDER_POS = { x: 18.5, z: 7.5 };
 export const MERCHANT_POS = { x: -7, z: 3 };
 /** Where the Speculator waits while his buyout offer stands. */
 export const SPECULATOR_POS = { x: 7, z: -4 };
+/** The Community Board near the plaza, where residents post requests. */
+export const BOARD_POS = { x: -4, z: 5 };
 
 /** Loan options offered by the shark. owed = principal * (1 + rate). */
 export const LOAN_TIERS: LoanTier[] = [

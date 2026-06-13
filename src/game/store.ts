@@ -31,7 +31,9 @@ import type {
   GameEvent,
   HarvestPop,
   InteractTarget,
+  LegacyState,
   LoanState,
+  ResidentRequest,
   MarketResource,
   MerchantDeal,
   MerchantState,
@@ -122,6 +124,17 @@ const FORTUNE_MAX_DUR = 70;
 // loan shark
 const LOAN_OVERDUE_GROWTH = 1.12; // debt grows this much each overdue day
 
+// prestige
+const LEGACY_PER_TOKEN = 0.08; // +8% to all income per legacy token
+
+// resident requests (community board)
+const REQUEST_FIRST_GAP = 70;
+const REQUEST_MIN_GAP = 110;
+const REQUEST_MAX_GAP = 185;
+const MAX_REQUESTS = 3;
+
+const legacyMultiplier = (legacy: { tokens: number }) => 1 + legacy.tokens * LEGACY_PER_TOKEN;
+
 export type GamePhase = 'menu' | 'create' | 'playing';
 
 let toastId = 1;
@@ -129,7 +142,7 @@ let toastId = 1;
 const rand = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
 
 /** Passive BSWX produced per economy tick from the current town layout. */
-function passiveIncomePerTick(plots: Plot[], circulation: number): number {
+function passiveIncomePerTick(plots: Plot[], circulation: number, legacyMult = 1): number {
   let base = 0;
   let cottages = 0;
   let gardens = 0;
@@ -141,7 +154,7 @@ function passiveIncomePerTick(plots: Plot[], circulation: number): number {
   }
   const mult =
     (1 + cottages * COTTAGE_INCOME_BONUS + gardens * GARDEN_INCOME_BONUS) * (circulation || 1);
-  return base * mult;
+  return base * mult * legacyMult;
 }
 
 interface GameState {
@@ -188,6 +201,12 @@ interface GameState {
   // free-placement building & endless goals
   placing: PlacingState | null;
   goalIndex: number;
+
+  // prestige & resident requests
+  legacy: LegacyState;
+  requests: ResidentRequest[];
+  nextRequestIn: number;
+  relationships: Record<string, number>;
 
   // live events, offline payout & harvest juice
   activeEvent: GameEvent | null;
@@ -257,6 +276,8 @@ interface GameState {
   repayLoan: (amount: number) => void;
   acceptBuyout: () => void;
   declineBuyout: () => void;
+  fulfillRequest: (id: number) => void;
+  charterDistrict: () => void;
   unstuck: () => void;
   completeTeleport: () => void;
   save: () => void;
@@ -294,6 +315,10 @@ function freshPlayerState() {
     nodesVersion: 0,
     plots: [] as Plot[],
     goalIndex: 0,
+    legacy: { tokens: 0, district: 1 } as LegacyState,
+    requests: [] as ResidentRequest[],
+    nextRequestIn: REQUEST_FIRST_GAP,
+    relationships: {} as Record<string, number>,
     timeOfDay: 0.32,
     day: 1,
     food: 6,
@@ -318,6 +343,8 @@ export const useGame = create<GameState>((set, get) => {
   let popId = 1;
   let dealId = 1;
   let plotSeq = 1;
+  let requestId = 1;
+  let firstFortune = true;
 
   // ---- quest helpers (operate on draft-ish copies) ----
 
@@ -478,9 +505,11 @@ export const useGame = create<GameState>((set, get) => {
             nextSpeculatorIn: SPECULATOR_FIRST_GAP,
             fortune: null,
             nextFortuneIn: FORTUNE_FIRST_GAP,
+            nextRequestIn: REQUEST_FIRST_GAP,
           });
           economyTimer = 0;
           comboTimer = 0;
+          firstFortune = true;
           if (!loaded.welcomeBack) get().addToast('Welcome back to New Greenwood.', 'info');
           return;
         }
@@ -523,6 +552,7 @@ export const useGame = create<GameState>((set, get) => {
         nextFortuneIn: FORTUNE_FIRST_GAP,
         toasts: [],
       });
+      firstFortune = true;
       const first = appearance.name.split(' ')[0];
       get().addToast(`Welcome to Greenwood, ${first} the ${calling?.name ?? 'Builder'}.`, 'reward', '✦');
       get().addToast('Speak with O.W. Gurley at the plaza to begin.', 'quest', '!');
@@ -683,6 +713,7 @@ export const useGame = create<GameState>((set, get) => {
         const residents = deriveResidents(s.plots);
         const { population, employed, employedRatio } = employmentStats(residents);
         const fortune = s.fortune;
+        const legacyMult = legacyMultiplier(s.legacy);
 
         // 1) gardens grow food (a blight stops them cold)
         let food = Math.min(FOOD_CAP, s.food + (fortune?.foodOff ? 0 : levelOf('garden')));
@@ -730,7 +761,7 @@ export const useGame = create<GameState>((set, get) => {
           income += BUILDINGS[p.building].income * p.level;
         }
         income += foodSold * FOOD_PRICE + goodsSold * GOODS_PRICE;
-        income = Math.round(income * mult * (fortune?.incomeMult ?? 1));
+        income = Math.round(income * mult * (fortune?.incomeMult ?? 1) * legacyMult);
 
         // market prices drift like a real exchange
         const drift = (v: number, lo: number, hi: number) =>
@@ -824,6 +855,13 @@ export const useGame = create<GameState>((set, get) => {
         const nextFortuneIn = state.nextFortuneIn - dt;
         if (nextFortuneIn <= 0) rollFortune();
         else set({ nextFortuneIn });
+      }
+
+      // residents post requests to the community board
+      {
+        const nextRequestIn = state.nextRequestIn - dt;
+        if (nextRequestIn <= 0) spawnRequest();
+        else set({ nextRequestIn });
       }
 
       // harvest combo decays when you stop swinging
@@ -930,6 +968,9 @@ export const useGame = create<GameState>((set, get) => {
       } else if (t.kind === 'speculator') {
         audio.sfx('ui');
         set({ panel: 'speculator' });
+      } else if (t.kind === 'board') {
+        audio.sfx('ui');
+        set({ panel: 'board' });
       }
     },
 
@@ -1204,7 +1245,7 @@ export const useGame = create<GameState>((set, get) => {
       if (!ev) return;
       set({ activeEvent: null, nextEventIn: rand(EVENT_MIN_GAP, EVENT_MAX_GAP) });
       if (ev.kind === 'rush') {
-        const perTick = passiveIncomePerTick(s.plots, s.circulation);
+        const perTick = passiveIncomePerTick(s.plots, s.circulation, legacyMultiplier(s.legacy));
         const reward = Math.max(RUSH_MIN, Math.round(perTick * RUSH_TICK_VALUE * rand(0.8, 1.4)));
         earn(reward);
         audio.sfx('coin');
@@ -1370,6 +1411,87 @@ export const useGame = create<GameState>((set, get) => {
       checkReputationObjectives();
     },
 
+    // ---- community board: resident requests ----
+    fulfillRequest: (id) => {
+      const s = get();
+      const req = s.requests.find((r) => r.id === id);
+      if (!req) return;
+      const have = req.kind === 'bswx' ? s.bswx : (s[req.kind] as number);
+      if (have < req.amount) {
+        const what = req.kind === 'bswx' ? 'BSWX' : RESOURCE_LABEL[req.kind];
+        get().addToast(`You need ${req.amount} ${what} to help with that.`, 'warn', '!');
+        audio.sfx('error');
+        return;
+      }
+      const rel = (s.relationships[req.residentId] ?? 0) + 1;
+      const patch: Partial<GameState> = {
+        requests: s.requests.filter((r) => r.id !== id),
+        relationships: { ...s.relationships, [req.residentId]: rel },
+        reputation: s.reputation + req.rewardRep,
+      };
+      (patch as Record<string, number>)[req.kind] = have - req.amount;
+      set(patch as never);
+      earn(req.rewardBswx);
+      audio.sfx('coin');
+      get().addToast(`${req.residentName} thanks you! +◆${req.rewardBswx}, +${req.rewardRep} rep`, 'reward', '💛');
+      if (rel === 3 || rel === 5) {
+        const bonus = rel * 15;
+        earn(bonus);
+        get().addToast(
+          `${req.residentName} is now a ${rel >= 5 ? 'dear friend' : 'good friend'}! Gift: ◆${bonus}`,
+          'reward',
+          '💞'
+        );
+      }
+      checkReputationObjectives();
+    },
+
+    // ---- prestige: charter a new district ----
+    charterDistrict: () => {
+      const s = get();
+      if (s.quests['legacy_restored']?.status !== 'done') {
+        get().addToast('Complete the founding story before chartering a new district.', 'warn', '!');
+        return;
+      }
+      const tokens = computeCharterTokens(s);
+      const fresh = freshPlayerState();
+      set({
+        ...fresh,
+        appearance: s.appearance,
+        legacy: { tokens: s.legacy.tokens + tokens, district: s.legacy.district + 1 },
+        quests: s.quests, // the story stays told — you are a seasoned founder
+        placing: null,
+        activeEvent: null,
+        nextEventIn: EVENT_FIRST_GAP,
+        welcomeBack: null,
+        harvestPop: null,
+        combo: 0,
+        merchant: null,
+        nextMerchantIn: MERCHANT_FIRST_GAP,
+        loan: null,
+        speculatorOffer: null,
+        nextSpeculatorIn: SPECULATOR_FIRST_GAP,
+        fortune: null,
+        nextFortuneIn: FORTUNE_FIRST_GAP,
+        nextRequestIn: REQUEST_FIRST_GAP,
+        panel: null,
+        dialogue: null,
+        harvesting: null,
+        moveTarget: null,
+      });
+      economyTimer = 0;
+      comboTimer = 0;
+      firstFortune = true;
+      audio.playLevelUp();
+      get().addToast(
+        `Chartered District ${s.legacy.district + 1}! +${tokens} Legacy ✦ — permanent +${Math.round(tokens * LEGACY_PER_TOKEN * 100)}% income.`,
+        'reward',
+        '🏙'
+      );
+      get().addToast('A fresh district rises. Your legacy carries forward.', 'quest', '✦');
+      get().save();
+    },
+
     save: () => {
       try {
         const s = get();
@@ -1385,6 +1507,9 @@ export const useGame = create<GameState>((set, get) => {
           quests: s.quests, trackedQuest: s.trackedQuest,
           plots: s.plots,
           goalIndex: s.goalIndex,
+          legacy: s.legacy,
+          requests: s.requests,
+          relationships: s.relationships,
           nodes: s.nodes.map((n) => ({ id: n.id, hp: n.hp, regrow: Math.round(n.regrow) })),
           loan: s.loan,
           lastSeen: Date.now(),
@@ -1581,11 +1706,15 @@ export const useGame = create<GameState>((set, get) => {
   /** Roll a town-wide fortune — a festival, boom, panic, or blight. */
   function rollFortune() {
     const s = get();
-    if (!s.plots.some((p) => p.building && p.construction === 0)) {
+    const operational = s.plots.filter((p) => p.building && p.construction === 0).length;
+    if (operational === 0) {
       set({ nextFortuneIn: 40 });
       return;
     }
-    const tmpl = FORTUNES[Math.floor(Math.random() * FORTUNES.length)];
+    // ease players in: the first fortune (and the early game) is always good
+    const pool = firstFortune || operational < 3 ? FORTUNES.filter((f) => f.good) : FORTUNES;
+    const tmpl = pool[Math.floor(Math.random() * pool.length)];
+    firstFortune = false;
     const duration = Math.round(rand(FORTUNE_MIN_DUR, FORTUNE_MAX_DUR));
     set({
       fortune: { ...tmpl, timeLeft: duration, duration },
@@ -1644,6 +1773,43 @@ export const useGame = create<GameState>((set, get) => {
       get().addToast(`Overdue! The shark's debt swells to ◆${owed}. (−2 rep)`, 'warn', '⚠');
     }
   }
+
+  /** Legacy tokens a charter would award right now, from accumulated progress. */
+  function computeCharterTokens(s: GameState): number {
+    const pop = deriveResidents(s.plots).length;
+    return Math.max(
+      1,
+      Math.floor(s.totalEarned / 4000) + Math.floor(s.reputation / 40) + Math.floor(pop / 4)
+    );
+  }
+
+  /** A resident posts a resource request to the community board. */
+  function spawnRequest() {
+    const s = get();
+    const residents = deriveResidents(s.plots);
+    const busy = new Set(s.requests.map((r) => r.residentId));
+    const free = residents.filter((r) => !busy.has(r.id));
+    if (free.length === 0 || s.requests.length >= MAX_REQUESTS) {
+      set({ nextRequestIn: 30 });
+      return;
+    }
+    const res = free[Math.floor(Math.random() * free.length)];
+    const kinds = ['wood', 'stone', 'clay'] as const;
+    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    const amount = 5 + Math.floor(Math.random() * (6 + s.level));
+    const unitVal = kind === 'clay' ? 3 : 2.4;
+    const rewardBswx = Math.round(amount * unitVal * 1.6);
+    const rel = s.relationships[res.id] ?? 0;
+    const rewardRep = 2 + Math.floor(rel / 2);
+    set({
+      requests: [
+        ...s.requests,
+        { id: requestId++, residentId: res.id, residentName: res.name, kind, amount, rewardBswx, rewardRep },
+      ],
+      nextRequestIn: rand(REQUEST_MIN_GAP, REQUEST_MAX_GAP),
+    });
+    get().addToast(`${res.name} pinned a request to the community board.`, 'info', '📌');
+  }
 });
 
 // debug handle (harmless in prod, invaluable when investigating live issues)
@@ -1687,13 +1853,14 @@ function loadSave(): Partial<GameState> | null {
       .filter((p) => p.building)
       .map((p) => ({ ...p, rot: p.rot ?? 0 }));
     const circulation = data.circulation ?? 1;
+    const legacy: LegacyState = data.legacy ?? { tokens: 0, district: 1 };
 
     // offline earnings — accrue passive income for time spent away (capped)
     let welcomeBack: WelcomeBack | null = null;
     if (data.lastSeen) {
       const elapsed = Math.max(0, (Date.now() - data.lastSeen) / 1000);
       if (elapsed >= OFFLINE_MIN_SECONDS) {
-        const perTick = passiveIncomePerTick(plots, circulation);
+        const perTick = passiveIncomePerTick(plots, circulation, legacyMultiplier(legacy));
         if (perTick > 0) {
           const ticks = Math.floor(Math.min(elapsed, OFFLINE_CAP) / ECONOMY_TICK);
           const bswx = Math.round(perTick * ticks * OFFLINE_EFFICIENCY);
@@ -1726,6 +1893,9 @@ function loadSave(): Partial<GameState> | null {
       trackedQuest: data.trackedQuest ?? null,
       plots,
       goalIndex: data.goalIndex ?? 0,
+      legacy,
+      requests: data.requests ?? [],
+      relationships: data.relationships ?? {},
       nodes,
       nodesVersion: 1,
       welcomeBack,
