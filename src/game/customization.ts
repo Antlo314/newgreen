@@ -49,6 +49,11 @@ export const CHARACTER_MODELS: CharacterModelDef[] = [
     slots: { shirt: ['Red_Dark'], pants: ['LightBlue'] },
   },
   {
+    id: 'voyager_m', name: 'The Voyager', desc: 'A traveler with a satchel packed for opportunity.',
+    file: '/models/character/modular/Adventurer.gltf',
+    slots: { shirt: ['Green', 'LightGreen'], pants: ['Brown', 'Brown2'] },
+  },
+  {
     id: 'suit_f', name: 'The Boss', desc: 'Blazer sharp enough to cut a deal.',
     file: '/models/character/modular/F_Suit.gltf',
     slots: { shirt: ['Black'], pants: ['Brown'] },
