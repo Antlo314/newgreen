@@ -136,6 +136,14 @@ export interface QuestProgress {
   progress: number[];
 }
 
+// ---------------------------------------------------------------------------
+// Skills — the player's personal mastery, leveled up with points earned each
+// level. Distinct from Founder Boons (civic, story-driven, town-wide).
+// ---------------------------------------------------------------------------
+
+export type SkillId = 'vigor' | 'labor' | 'haggle' | 'stride';
+export type Skills = Record<SkillId, number>;
+
 export type HairStyle = 'classic' | 'fade' | 'afro' | 'locs' | 'braids' | 'puffs' | 'waves' | 'bald';
 export type HatStyle = 'none' | 'cap' | 'bowler' | 'tophat' | 'headwrap';
 export type AccessoryStyle = 'none' | 'glasses' | 'earrings' | 'bowtie';

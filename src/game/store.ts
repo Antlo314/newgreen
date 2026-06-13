@@ -8,8 +8,14 @@ import {
   GARDEN_INCOME_BONUS,
   GOALS,
   goalAt,
+  boonBuildFactor,
+  boonIncomeMult,
+  boonMarketMult,
+  boonXpMult,
+  emptySkills,
   incomeTimeFactor,
   isNightTime,
+  MAX_SKILL,
   LOAN_TIERS,
   MAX_BUILDING_LEVEL,
   MERCHANT_POS,
@@ -47,6 +53,8 @@ import type {
   QuestStatus,
   ResourceNode,
   ResourceType,
+  SkillId,
+  Skills,
   SpeculatorOffer,
   Toast,
   TownGoal,
@@ -74,6 +82,14 @@ const INCOME_SCALE = 0.72;
 const MOVE_DRAIN = 1.5; // stamina per second while on the move
 const IDLE_REGEN = 7; // stamina per second while standing still
 const NIGHT_REGEN_MULT = 1.6; // you recover quicker after dark
+const SPRINT_DRAIN_MULT = 2.2; // sprinting burns stamina faster
+
+// skill effects (per point invested)
+const VIGOR_MAX_PER_PT = 6; // +max stamina, applied when the point is spent
+const VIGOR_DRAIN_PER_PT = 0.08; // each Vigor point shaves this off movement drain
+const LABOR_TIME_PER_PT = 0.06; // each Labor point trims this off a harvest swing
+const HAGGLE_SELL_PER_PT = 0.05; // better sell price per Haggling point
+const HAGGLE_BUY_PER_PT = 0.04; // cheaper purchases per Haggling point
 const HARVEST_YIELD: Record<ResourceType, [number, number]> = {
   wood: [2, 3],
   stone: [2, 3],
@@ -190,6 +206,12 @@ interface GameState {
   level: number;
   xp: number;
   totalEarned: number;
+  /** whether the player is sprinting right now (burns extra stamina) */
+  sprinting: boolean;
+
+  // personal mastery
+  skillPoints: number;
+  skills: Skills;
 
   // world
   nodes: ResourceNode[];
@@ -253,7 +275,8 @@ interface GameState {
   startGame: (fresh: boolean) => void;
   createCharacter: (appearance: PlayerAppearance) => void;
   backToMenu: () => void;
-  setPlayerPos: (x: number, z: number, facing: number, moving: boolean) => void;
+  setPlayerPos: (x: number, z: number, facing: number, moving: boolean, sprinting?: boolean) => void;
+  spendSkill: (id: SkillId) => void;
   setMoveTarget: (t: { x: number; z: number } | null) => void;
   setInteractTarget: (t: InteractTarget | null) => void;
   setPanel: (p: PanelId) => void;
@@ -325,6 +348,9 @@ function freshPlayerState() {
     level: 1,
     xp: 0,
     totalEarned: 0,
+    sprinting: false,
+    skillPoints: 0,
+    skills: emptySkills(),
     nodes: generateResourceNodes(),
     nodesVersion: 0,
     plots: [] as Plot[],
@@ -445,21 +471,32 @@ export const useGame = create<GameState>((set, get) => {
     if (changed) set({ quests });
   }
 
-  function grantXp(amount: number) {
+  function grantXp(rawAmount: number) {
     const state = get();
+    const amount = rawAmount * boonXpMult(state.quests);
     let xp = state.xp + amount;
     let level = state.level;
     let staminaMax = state.staminaMax;
-    let leveled = false;
+    let gained = 0;
     while (xp >= xpForLevel(level)) {
       xp -= xpForLevel(level);
       level += 1;
       staminaMax += 8;
-      leveled = true;
+      gained += 1;
     }
-    set({ xp, level, staminaMax, stamina: leveled ? staminaMax : state.stamina });
-    if (leveled) {
-      get().addToast(`Level up! You are now level ${level}. Max stamina +8.`, 'reward', '★');
+    set({
+      xp,
+      level,
+      staminaMax,
+      stamina: gained > 0 ? staminaMax : state.stamina,
+      skillPoints: state.skillPoints + gained,
+    });
+    if (gained > 0) {
+      get().addToast(
+        `Level up! Now level ${level}. +${gained} skill point${gained > 1 ? 's' : ''} — spend it in Inventory (I).`,
+        'reward',
+        '★'
+      );
       audio.playLevelUp();
     }
   }
@@ -581,8 +618,30 @@ export const useGame = create<GameState>((set, get) => {
       set({ phase: 'menu', panel: null, dialogue: null, harvesting: null, moveTarget: null });
     },
 
-    setPlayerPos: (px, pz, facing, moving) => set({ px, pz, facing, moving }),
+    setPlayerPos: (px, pz, facing, moving, sprinting = false) =>
+      set({ px, pz, facing, moving, sprinting: moving && sprinting }),
     setMoveTarget: (moveTarget) => set({ moveTarget }),
+
+    spendSkill: (id) => {
+      const s = get();
+      if (s.skillPoints <= 0) return;
+      const cur = s.skills[id] ?? 0;
+      if (cur >= MAX_SKILL) return;
+      const patch: Partial<GameState> = {
+        skills: { ...s.skills, [id]: cur + 1 },
+        skillPoints: s.skillPoints - 1,
+      };
+      // Vigor permanently raises (and tops up) your max stamina on the spot
+      if (id === 'vigor') {
+        const staminaMax = s.staminaMax + VIGOR_MAX_PER_PT;
+        patch.staminaMax = staminaMax;
+        patch.stamina = Math.min(staminaMax, s.stamina + VIGOR_MAX_PER_PT);
+      }
+      set(patch as never);
+      audio.sfx('questAccept');
+      get().addToast(`${id[0].toUpperCase()}${id.slice(1)} raised to ${cur + 1}.`, 'reward', '★');
+      get().save();
+    },
     setInteractTarget: (interactTarget) => {
       const cur = get().interactTarget;
       if (cur?.id === interactTarget?.id && cur?.kind === interactTarget?.kind) return;
@@ -655,7 +714,9 @@ export const useGame = create<GameState>((set, get) => {
       // you recover faster at night). Run dry and you trudge until you rest.
       let stamina: number;
       if (state.moving) {
-        stamina = Math.max(0, state.stamina - MOVE_DRAIN * dt);
+        const vigorEase = 1 - (state.skills.vigor ?? 0) * VIGOR_DRAIN_PER_PT;
+        const drain = MOVE_DRAIN * vigorEase * (state.sprinting ? SPRINT_DRAIN_MULT : 1);
+        stamina = Math.max(0, state.stamina - drain * dt);
       } else {
         const regen = IDLE_REGEN * (isNightTime(timeOfDay) ? NIGHT_REGEN_MULT : 1);
         stamina = Math.min(state.staminaMax, state.stamina + regen * dt);
@@ -726,7 +787,8 @@ export const useGame = create<GameState>((set, get) => {
         if (!node || node.hp <= 0) {
           set({ harvesting: null });
         } else {
-          const progress = h.progress + dt / HARVEST_TIME;
+          const effTime = HARVEST_TIME * (1 - (state.skills.labor ?? 0) * LABOR_TIME_PER_PT);
+          const progress = h.progress + dt / effTime;
           if (progress >= 1) {
             finishHarvest(node);
           } else {
@@ -799,7 +861,9 @@ export const useGame = create<GameState>((set, get) => {
           income += BUILDINGS[p.building].income * p.level * incomeTimeFactor(p.building, s.timeOfDay);
         }
         income += foodSold * FOOD_PRICE + goodsSold * GOODS_PRICE;
-        income = Math.round(income * mult * (fortune?.incomeMult ?? 1) * legacyMult * INCOME_SCALE);
+        income = Math.round(
+          income * mult * (fortune?.incomeMult ?? 1) * legacyMult * INCOME_SCALE * boonIncomeMult(s.quests)
+        );
 
         // market prices drift like a real exchange
         const drift = (v: number, lo: number, hi: number) =>
@@ -918,7 +982,8 @@ export const useGame = create<GameState>((set, get) => {
       function finishHarvest(node: ResourceNode) {
         const s = get();
         const [lo, hi] = HARVEST_YIELD[node.type];
-        const bonus = Math.floor((s.level - 1) / 2); // +1 yield every 2 levels
+        // +1 yield every 2 levels, plus each point invested in Labor
+        const bonus = Math.floor((s.level - 1) / 2) + (s.skills.labor ?? 0);
 
         // sustained harvesting builds a combo, raising the chance of a crit
         const combo = Math.min(COMBO_MAX, s.combo + 1);
@@ -1163,7 +1228,7 @@ export const useGame = create<GameState>((set, get) => {
         z: pl.z,
         building: pl.buildingId,
         level: 1,
-        construction: 6,
+        construction: Math.max(1, Math.round(6 * boonBuildFactor(s.quests))),
         rot: pl.rot,
       };
       set({
@@ -1227,7 +1292,9 @@ export const useGame = create<GameState>((set, get) => {
         return;
       }
       const plots = state.plots.map((p) =>
-        p.id === plotId ? { ...p, level: p.level + 1, construction: 4 } : p
+        p.id === plotId
+          ? { ...p, level: p.level + 1, construction: Math.max(1, Math.round(4 * boonBuildFactor(state.quests))) }
+          : p
       );
       set({
         plots,
@@ -1246,7 +1313,8 @@ export const useGame = create<GameState>((set, get) => {
       const have = type === 'goods' ? s.goods : s[type];
       const qty = Math.min(amount, Math.floor(have));
       if (qty <= 0) return;
-      const gain = Math.max(1, Math.floor(s.marketPrices[type] * qty));
+      const sellMult = (1 + (s.skills.haggle ?? 0) * HAGGLE_SELL_PER_PT) * boonMarketMult(s.quests);
+      const gain = Math.max(1, Math.floor(s.marketPrices[type] * qty * sellMult));
       set({ [type]: have - qty } as never);
       earn(gain);
       audio.sfx('coin');
@@ -1255,7 +1323,8 @@ export const useGame = create<GameState>((set, get) => {
 
     buyResource: (type, amount) => {
       const s = get();
-      const cost = Math.ceil(s.marketPrices[type] * MARKET_SPREAD * amount);
+      const buyDiscount = 1 - (s.skills.haggle ?? 0) * HAGGLE_BUY_PER_PT;
+      const cost = Math.ceil(s.marketPrices[type] * MARKET_SPREAD * amount * buyDiscount);
       if (s.bswx < cost) {
         get().addToast('Not enough BSWX for that purchase.', 'warn', '!');
         return;
@@ -1295,7 +1364,11 @@ export const useGame = create<GameState>((set, get) => {
       if (!ev) return;
       set({ activeEvent: null, nextEventIn: rand(EVENT_MIN_GAP, EVENT_MAX_GAP) });
       if (ev.kind === 'rush') {
-        const perTick = passiveIncomePerTick(s.plots, s.circulation, legacyMultiplier(s.legacy));
+        const perTick = passiveIncomePerTick(
+          s.plots,
+          s.circulation,
+          legacyMultiplier(s.legacy) * boonIncomeMult(s.quests)
+        );
         const reward = Math.max(RUSH_MIN, Math.round(perTick * RUSH_TICK_VALUE * rand(0.8, 1.4)));
         earn(reward);
         audio.sfx('coin');
@@ -1553,6 +1626,7 @@ export const useGame = create<GameState>((set, get) => {
           food: s.food, goods: s.goods, marketPrices: s.marketPrices, circulation: s.circulation,
           stamina: s.stamina, staminaMax: s.staminaMax,
           reputation: s.reputation, level: s.level, xp: s.xp, totalEarned: s.totalEarned,
+          skillPoints: s.skillPoints, skills: s.skills,
           timeOfDay: s.timeOfDay, day: s.day,
           quests: s.quests, trackedQuest: s.trackedQuest,
           plots: s.plots,
@@ -1927,7 +2001,7 @@ function loadSave(): Partial<GameState> | null {
     if (data.lastSeen) {
       const elapsed = Math.max(0, (Date.now() - data.lastSeen) / 1000);
       if (elapsed >= OFFLINE_MIN_SECONDS) {
-        const perTick = passiveIncomePerTick(plots, circulation, legacyMultiplier(legacy));
+        const perTick = passiveIncomePerTick(plots, circulation, legacyMultiplier(legacy) * boonIncomeMult(quests));
         if (perTick > 0) {
           const ticks = Math.floor(Math.min(elapsed, OFFLINE_CAP) / ECONOMY_TICK);
           const bswx = Math.round(perTick * ticks * OFFLINE_EFFICIENCY);
@@ -1954,6 +2028,10 @@ function loadSave(): Partial<GameState> | null {
       level: data.level ?? 1,
       xp: data.xp ?? 0,
       totalEarned: data.totalEarned ?? 0,
+      // existing saves get one retroactive point per level already earned
+      skillPoints: data.skillPoints ?? Math.max(0, (data.level ?? 1) - 1),
+      skills: { ...emptySkills(), ...(data.skills ?? {}) },
+      sprinting: false,
       timeOfDay: data.timeOfDay ?? 0.32,
       day: data.day ?? 1,
       quests,

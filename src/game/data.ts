@@ -7,6 +7,8 @@ import type {
   ProvisionDef,
   QuestDef,
   QuestProgress,
+  SkillId,
+  Skills,
   TownGoal,
 } from './types';
 
@@ -562,6 +564,87 @@ export const MUSIC = {
 // ---------------------------------------------------------------------------
 
 export const xpForLevel = (level: number) => Math.round(80 * Math.pow(level, 1.5));
+
+// ---------------------------------------------------------------------------
+// SKILLS — personal mastery. Each level grants a skill point to invest across
+// four tracks; every point compounds, so the grind always builds toward something.
+// ---------------------------------------------------------------------------
+
+export const MAX_SKILL = 5;
+
+export interface SkillDef {
+  id: SkillId;
+  name: string;
+  icon: string;
+  desc: string;
+  /** short per-point effect summary for the UI */
+  perPoint: string;
+}
+
+export const SKILLS: SkillDef[] = [
+  { id: 'vigor', name: 'Vigor', icon: '💪', desc: 'Hardier legs and lungs.', perPoint: '+6 max stamina · −8% drain' },
+  { id: 'labor', name: 'Labor', icon: '⛏️', desc: 'A practiced hand at the harvest.', perPoint: '+1 yield · −6% swing time' },
+  { id: 'haggle', name: 'Haggling', icon: '🤝', desc: 'A sharper tongue at the Exchange.', perPoint: '+5% sell · −4% buy' },
+  { id: 'stride', name: 'Stride', icon: '👟', desc: 'Quicker on your feet.', perPoint: '+5% move speed' },
+];
+
+export const emptySkills = (): Skills => ({ vigor: 0, labor: 0, haggle: 0, stride: 0 });
+
+// ---------------------------------------------------------------------------
+// FOUNDER BOONS — as each founder joins the town (one per story beat) they lend
+// their gift permanently. Civic, town-wide, and earned by progressing the story.
+// ---------------------------------------------------------------------------
+
+export interface BoonDef {
+  npc: string;
+  name: string;
+  icon: string;
+  desc: string;
+  /** quest that, once DONE, activates this boon (matches the founder's reveal) */
+  unlock: string;
+}
+
+export const FOUNDER_BOONS: BoonDef[] = [
+  {
+    npc: 'gurley',
+    name: "Gurley's Vision",
+    icon: '🏛️',
+    desc: '+8% income from all your businesses.',
+    unlock: 'first_foundations',
+  },
+  {
+    npc: 'rector',
+    name: "Rector's Ledger",
+    icon: '🛢️',
+    desc: '+15% on everything you sell at the Exchange.',
+    unlock: 'open_for_business',
+  },
+  {
+    npc: 'stradford',
+    name: "Stradford's Crews",
+    icon: '🏨',
+    desc: 'Buildings construct & upgrade 25% faster.',
+    unlock: 'ledger_grows',
+  },
+  {
+    npc: 'gerumba',
+    name: "Gerumba's Wisdom",
+    icon: '📜',
+    desc: '+10% experience from everything you do.',
+    unlock: 'banking_tomorrow',
+  },
+];
+
+export function boonActive(npc: string, quests: Record<string, QuestProgress>): boolean {
+  const boon = FOUNDER_BOONS.find((b) => b.npc === npc);
+  return !!boon && quests[boon.unlock]?.status === 'done';
+}
+
+/** Active boon multipliers, derived from story progress. */
+export const boonIncomeMult = (q: Record<string, QuestProgress>) => (boonActive('gurley', q) ? 1.08 : 1);
+export const boonMarketMult = (q: Record<string, QuestProgress>) => (boonActive('rector', q) ? 1.15 : 1);
+export const boonBuildFactor = (q: Record<string, QuestProgress>) => (boonActive('stradford', q) ? 0.75 : 1);
+export const boonXpMult = (q: Record<string, QuestProgress>) => (boonActive('gerumba', q) ? 1.1 : 1);
 
 export const RESOURCE_LABEL: Record<string, string> = {
   wood: 'Lumber',

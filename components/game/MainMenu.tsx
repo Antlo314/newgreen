@@ -69,6 +69,7 @@ export default function MainMenu() {
 
         <div className="mt-8 grid grid-cols-3 gap-x-6 gap-y-1 text-[10px] text-white/45">
           <span>WASD / click — move</span>
+          <span>Shift — sprint</span>
           <span>E — interact</span>
           <span>Q — quests</span>
           <span>I — inventory</span>

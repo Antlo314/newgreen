@@ -61,6 +61,7 @@ function TopBar() {
   const xp = useGame((s) => s.xp);
   const stamina = useGame((s) => s.stamina);
   const staminaMax = useGame((s) => s.staminaMax);
+  const skillPoints = useGame((s) => s.skillPoints);
   const day = useGame((s) => s.day);
   const timeOfDay = useGame((s) => s.timeOfDay);
   const muted = useGame((s) => s.muted);
@@ -113,6 +114,15 @@ function TopBar() {
             <div className="h-1.5 w-16 overflow-hidden rounded-full bg-white/15 sm:w-24">
               <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${Math.min(100, (xp / xpNeed) * 100)}%` }} />
             </div>
+            {skillPoints > 0 && (
+              <button
+                onClick={() => setPanel('inventory')}
+                title="Unspent skill points — click to spend in Inventory"
+                className="animate-eventPulse rounded-full bg-amber-400/25 px-1.5 py-0.5 text-[9px] font-bold text-amber-200"
+              >
+                ★{skillPoints}
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold tracking-wide text-emerald-300">STA</span>

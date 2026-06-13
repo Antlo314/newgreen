@@ -24,6 +24,8 @@ import { audio } from '../../src/game/audio';
 import type { InteractTarget } from '../../src/game/types';
 
 const SPEED = 5.2;
+const SPRINT_MULT = 1.7; // hold Shift to sprint (burns extra stamina)
+const STRIDE_PER_PT = 0.05; // Stride skill: +5% base move speed per point
 const PLAYER_R = 0.45;
 const INTERACT_RANGE = 2.6;
 
@@ -127,12 +129,15 @@ export default function Player() {
       if (k['d'] || k['arrowright']) tmpDir.x += 1;
     }
 
+    const baseSpeed = SPEED * (1 + (s.skills.stride ?? 0) * STRIDE_PER_PT);
+    const wantSprint = !inputBlocked && !!keys.current['shift'];
     let speed = 0;
+    let sprinting = false;
     if (tmpDir.lengthSq() > 0) {
       // keyboard overrides click-to-move
       if (s.moveTarget) s.setMoveTarget(null);
       tmpDir.normalize();
-      speed = SPEED;
+      speed = baseSpeed;
     } else if (s.moveTarget && !inputBlocked) {
       const dx = s.moveTarget.x - pos.x;
       const dz = s.moveTarget.z - pos.z;
@@ -141,12 +146,18 @@ export default function Player() {
         s.setMoveTarget(null);
       } else {
         tmpDir.set(dx / dist, 0, dz / dist);
-        speed = SPEED * Math.min(1, dist / 0.8);
+        speed = baseSpeed * Math.min(1, dist / 0.8);
       }
     }
 
+    const curStamina = useGame.getState().stamina;
+    // sprint while you have the legs for it
+    if (speed > 0 && wantSprint && curStamina > 0) {
+      speed *= SPRINT_MULT;
+      sprinting = true;
+    }
     // winded: with no stamina left you can only trudge until you rest or eat
-    if (speed > 0 && useGame.getState().stamina <= 0) speed *= 0.45;
+    if (speed > 0 && curStamina <= 0) speed *= 0.45;
 
     // moving cancels an in-progress harvest
     if (speed > 0.5 && s.harvesting) s.cancelHarvest();
@@ -172,7 +183,7 @@ export default function Player() {
     walkRef.current.speed = speed;
 
     // publish position (throttled by zustand shallow check downstream)
-    s.setPlayerPos(pos.x, pos.z, group.current.rotation.y, speed > 0.1);
+    s.setPlayerPos(pos.x, pos.z, group.current.rotation.y, speed > 0.1, sprinting && speed > 0.1);
 
     // --- interaction target scan ---
     updateInteractTarget(pos.x, pos.z, s);

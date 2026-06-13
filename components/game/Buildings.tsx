@@ -29,11 +29,14 @@ export default function Buildings() {
 
 function ConstructionSite({ plot }: { plot: Plot }) {
   const ref = useRef<THREE.Group>(null);
+  // capture the starting build time so the rise animation is correct at any
+  // construction speed (e.g. with Stradford's faster-crews boon)
+  const maxC = useRef(plot.construction);
   useFrame(() => {
     if (!ref.current) return;
+    if (plot.construction > maxC.current) maxC.current = plot.construction;
     // building rises out of the ground as construction completes
-    const total = plot.level === 1 ? 6 : 4;
-    const k = 1 - plot.construction / total;
+    const k = 1 - plot.construction / Math.max(0.001, maxC.current);
     ref.current.scale.y = 0.2 + k * 0.8;
   });
   return (

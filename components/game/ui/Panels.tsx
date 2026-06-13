@@ -3,14 +3,18 @@
 import React from 'react';
 import { useGame } from '../../../src/game/store';
 import {
+  boonActive,
   BUILDINGS,
+  FOUNDER_BOONS,
   LOAN_TIERS,
   MAX_BUILDING_LEVEL,
+  MAX_SKILL,
   NPC_BY_ID,
   PROVISIONS,
   QUESTS,
   QUEST_BY_ID,
   RESOURCE_LABEL,
+  SKILLS,
   UPGRADE_COST_MULT,
 } from '../../../src/game/data';
 import type { BuildingConfig, QuestDef } from '../../../src/game/types';
@@ -197,6 +201,9 @@ function Inventory() {
         </div>
       </div>
 
+      <SkillsSection />
+      <BoonsSection />
+
       {s.quests['legacy_restored']?.status === 'done' && (
         <button
           onClick={() => s.setPanel('charter')}
@@ -205,6 +212,98 @@ function Inventory() {
           🏙️ Charter a New District
         </button>
       )}
+    </div>
+  );
+}
+
+function SkillsSection() {
+  const skills = useGame((s) => s.skills);
+  const skillPoints = useGame((s) => s.skillPoints);
+  const spendSkill = useGame((s) => s.spendSkill);
+  return (
+    <div>
+      <h3 className="mb-1.5 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-white/50">
+        Founder&apos;s Skills
+        {skillPoints > 0 && (
+          <span className="rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-300">
+            ★ {skillPoints} to spend
+          </span>
+        )}
+      </h3>
+      <div className="space-y-2">
+        {SKILLS.map((def) => {
+          const lvl = skills[def.id] ?? 0;
+          const maxed = lvl >= MAX_SKILL;
+          const can = skillPoints > 0 && !maxed;
+          return (
+            <div key={def.id} className="rounded-lg border border-white/10 bg-white/5 p-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-white">
+                  {def.icon} {def.name}
+                </span>
+                <span className="flex gap-0.5">
+                  {Array.from({ length: MAX_SKILL }).map((_, i) => (
+                    <span
+                      key={i}
+                      className={`h-1.5 w-3 rounded-sm ${i < lvl ? 'bg-amber-400' : 'bg-white/15'}`}
+                    />
+                  ))}
+                </span>
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <span className="text-[10px] text-white/55">
+                  {def.desc} <span className="text-amber-200/70">({def.perPoint})</span>
+                </span>
+                <button
+                  disabled={!can}
+                  onClick={() => spendSkill(def.id)}
+                  className={`shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-bold transition ${
+                    can
+                      ? 'border-amber-400/50 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25'
+                      : 'cursor-not-allowed border-white/10 bg-white/5 text-white/35'
+                  }`}
+                >
+                  {maxed ? 'Maxed' : 'Invest ★'}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BoonsSection() {
+  const quests = useGame((s) => s.quests);
+  return (
+    <div>
+      <h3 className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-white/50">Founder Boons</h3>
+      <p className="mb-2 text-[11px] leading-relaxed text-white/55">
+        As each founder joins New Greenwood, they lend their gift to the whole town — forever.
+      </p>
+      <div className="space-y-1.5">
+        {FOUNDER_BOONS.map((b) => {
+          const active = boonActive(b.npc, quests);
+          return (
+            <div
+              key={b.npc}
+              className={`flex items-center gap-2 rounded-lg border p-2.5 ${
+                active ? 'border-emerald-400/30 bg-emerald-400/5' : 'border-white/10 bg-white/[0.03] opacity-60'
+              }`}
+            >
+              <span className="text-lg">{b.icon}</span>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold text-white">{b.name}</div>
+                <div className="text-[10px] text-white/55">{b.desc}</div>
+              </div>
+              <span className={`shrink-0 text-[10px] font-bold ${active ? 'text-emerald-300' : 'text-white/40'}`}>
+                {active ? '✓ Active' : 'Locked'}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -376,7 +475,8 @@ function MarketPanel() {
       {MARKET_ROWS.map(({ type, icon, name, buyable }) => {
         const have = Math.floor(type === 'goods' ? s.goods : s[type]);
         const price = s.marketPrices[type];
-        const buyPrice = Math.ceil(price * 1.25);
+        const buyDiscount = 1 - (s.skills.haggle ?? 0) * 0.04; // mirrors HAGGLE_BUY_PER_PT
+        const buyPrice = Math.ceil(price * 1.25 * buyDiscount);
         return (
           <div key={type} className="rounded-xl border border-white/10 bg-white/5 p-3">
             <div className="flex items-center justify-between">
@@ -773,7 +873,7 @@ function HelpPanel() {
       </Section>
       <Section h="Movement">
         <Kbd>WASD</Kbd> or arrow keys to walk. You can also <b>click / tap the ground</b> to move there. Mouse wheel
-        zooms the camera.
+        zooms the camera. Hold <Kbd>Shift</Kbd> to <b>sprint</b> — quicker on your feet, but it burns stamina faster.
       </Section>
       <Section h="Interacting">
         Walk up to anything highlighted with a golden ring and press <Kbd>E</Kbd> (or tap the action button on mobile):
@@ -831,6 +931,12 @@ function HelpPanel() {
         the main story — each shows up with their name floating above them, ready to teach you the next part of the game.
         They keep their own hours too: catch them at their posts by day; after hours they head into their huts and
         vanish until morning, so plan your errands around the clock.
+      </Section>
+      <Section h="Skills &amp; Founder Boons">
+        Every level grants a <b>★ skill point</b> — spend it in your <Kbd>I</Kbd> Inventory across <b>Vigor</b> (stamina),{' '}
+        <b>Labor</b> (harvest), <b>Haggling</b> (trade) and <b>Stride</b> (speed) to sharpen your own craft. And as each
+        founder joins New Greenwood, their <b>Boon</b> lends a permanent town-wide bonus — more income, better prices,
+        faster building, extra XP. Both live in the Inventory.
       </Section>
       <Section h="Town Goals">
         Beyond the story, there&apos;s always a <b>🎯 Town Goal</b> on screen — grow your population, reputation, and
