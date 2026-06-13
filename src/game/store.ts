@@ -8,6 +8,8 @@ import {
   GARDEN_INCOME_BONUS,
   GOALS,
   goalAt,
+  incomeTimeFactor,
+  isNightTime,
   LOAN_TIERS,
   MAX_BUILDING_LEVEL,
   MERCHANT_POS,
@@ -60,8 +62,18 @@ const SAVE_KEY = 'newgreenwood3d_v1';
 const ECONOMY_TICK = 5; // seconds
 const DAY_LENGTH = 240; // seconds per full day/night cycle
 const NODE_REGROW = 70; // seconds
-const HARVEST_TIME = 1.1; // seconds per harvest swing
+const HARVEST_TIME = 1.25; // seconds per harvest swing
 const HARVEST_STAMINA = 6;
+
+// the grind: a single dial that damps all passive business income so BSWX is
+// a resource worth fighting for (and a buyout offer is a real temptation).
+const INCOME_SCALE = 0.72;
+
+// stamina is a real resource — walking burns it, rest restores it (faster at
+// night). Run yourself ragged and you trudge until you rest or grab a bite.
+const MOVE_DRAIN = 1.5; // stamina per second while on the move
+const IDLE_REGEN = 7; // stamina per second while standing still
+const NIGHT_REGEN_MULT = 1.6; // you recover quicker after dark
 const HARVEST_YIELD: Record<ResourceType, [number, number]> = {
   wood: [2, 3],
   stone: [2, 3],
@@ -106,13 +118,14 @@ const MERCHANT_MAX_GAP = 240;
 const MERCHANT_WINDOW = 75; // seconds the stall stays open
 const MERCHANT_INSPECTS = 1; // free inspections per visit
 
-// speculator buyout offers
+// speculator buyout offers — a shady outsider who only operates after dark and
+// fattens his bid when your coffers run low, so quick cash is a real lure.
 const SPECULATOR_FIRST_GAP = 200;
 const SPECULATOR_MIN_GAP = 190;
 const SPECULATOR_MAX_GAP = 330;
 const SPECULATOR_WINDOW = 60;
-const SPECULATOR_VALUE_MULT = 26; // BSWX per (income × level)
-const SPECULATOR_BASE = 60;
+const SPECULATOR_VALUE_MULT = 34; // BSWX per (income × level)
+const SPECULATOR_BASE = 120;
 
 // town-wide fortunes
 const FORTUNE_FIRST_GAP = 150;
@@ -154,7 +167,7 @@ function passiveIncomePerTick(plots: Plot[], circulation: number, legacyMult = 1
   }
   const mult =
     (1 + cottages * COTTAGE_INCOME_BONUS + gardens * GARDEN_INCOME_BONUS) * (circulation || 1);
-  return base * mult * legacyMult;
+  return base * mult * legacyMult * INCOME_SCALE;
 }
 
 interface GameState {
@@ -265,6 +278,7 @@ interface GameState {
   cancelPlacing: () => void;
   upgradePlot: (plotId: string) => void;
   demolishPlot: (plotId: string) => void;
+  rotatePlot: (plotId: string) => void;
   sellResource: (type: MarketResource, amount: number) => void;
   buyResource: (type: Exclude<MarketResource, 'goods'>, amount: number) => void;
   buyProvision: (id: string) => void;
@@ -337,6 +351,8 @@ export const useGame = create<GameState>((set, get) => {
   let economyTimer = 0;
   let saveTimer = 0;
   let staminaWarned = false;
+  let windedWarned = false;
+  let nightExplained = false;
   let hungerWarned = false;
   let comboTimer = 0;
   let eventId = 1;
@@ -615,6 +631,7 @@ export const useGame = create<GameState>((set, get) => {
       if (state.phase !== 'playing') return;
 
       // time of day
+      const wasNight = isNightTime(state.timeOfDay);
       let timeOfDay = state.timeOfDay + dt / DAY_LENGTH;
       let day = state.day;
       let dayRolled = false;
@@ -624,11 +641,31 @@ export const useGame = create<GameState>((set, get) => {
         dayRolled = true;
         get().addToast(`Day ${day} dawns over New Greenwood.`, 'info');
       }
+      // first time dusk falls, explain what night changes
+      if (isNightTime(timeOfDay) && !wasNight && !nightExplained) {
+        nightExplained = true;
+        get().addToast(
+          'Night falls — daytime shops quiet down, but the hotel & Sugar Bowl come alive. Rest comes quicker after dark.',
+          'info',
+          '🌙'
+        );
+      }
 
-      // stamina regen (faster when idle)
-      const regen = state.moving ? 1.6 : 4.5;
-      const stamina = Math.min(state.staminaMax, state.stamina + regen * dt);
+      // stamina is a real resource — walking burns it, rest restores it (and
+      // you recover faster at night). Run dry and you trudge until you rest.
+      let stamina: number;
+      if (state.moving) {
+        stamina = Math.max(0, state.stamina - MOVE_DRAIN * dt);
+      } else {
+        const regen = IDLE_REGEN * (isNightTime(timeOfDay) ? NIGHT_REGEN_MULT : 1);
+        stamina = Math.min(state.staminaMax, state.stamina + regen * dt);
+      }
       if (stamina > 25) staminaWarned = false;
+      if (stamina > 30) windedWarned = false;
+      if (stamina <= 0 && !windedWarned) {
+        windedWarned = true;
+        get().addToast('You are winded — rest a moment or grab a bite to get your legs back.', 'warn', '😮‍💨');
+      }
 
       // node regrowth
       let nodesVersion = state.nodesVersion;
@@ -715,8 +752,9 @@ export const useGame = create<GameState>((set, get) => {
         const fortune = s.fortune;
         const legacyMult = legacyMultiplier(s.legacy);
 
-        // 1) gardens grow food (a blight stops them cold)
-        let food = Math.min(FOOD_CAP, s.food + (fortune?.foodOff ? 0 : levelOf('garden')));
+        // 1) gardens grow food in daylight (a blight or nightfall stops them)
+        const daytime = !isNightTime(s.timeOfDay);
+        let food = Math.min(FOOD_CAP, s.food + (fortune?.foodOff || !daytime ? 0 : levelOf('garden')));
 
         // 2) families eat — a fed town prospers, a hungry one falters
         const need = population * FOOD_PER_RESIDENT;
@@ -758,10 +796,10 @@ export const useGame = create<GameState>((set, get) => {
         let income = 0;
         for (const p of s.plots) {
           if (!p.building || p.construction > 0) continue;
-          income += BUILDINGS[p.building].income * p.level;
+          income += BUILDINGS[p.building].income * p.level * incomeTimeFactor(p.building, s.timeOfDay);
         }
         income += foodSold * FOOD_PRICE + goodsSold * GOODS_PRICE;
-        income = Math.round(income * mult * (fortune?.incomeMult ?? 1) * legacyMult);
+        income = Math.round(income * mult * (fortune?.incomeMult ?? 1) * legacyMult * INCOME_SCALE);
 
         // market prices drift like a real exchange
         const drift = (v: number, lo: number, hi: number) =>
@@ -1160,6 +1198,18 @@ export const useGame = create<GameState>((set, get) => {
       get().addToast(`Demolished ${cfg.name} — salvaged some materials.`, 'info', '⚒');
     },
 
+    rotatePlot: (plotId) => {
+      const s = get();
+      const plot = s.plots.find((p) => p.id === plotId);
+      if (!plot?.building) return;
+      const plots = s.plots.map((p) =>
+        p.id === plotId ? { ...p, rot: (p.rot + Math.PI / 2) % (Math.PI * 2) } : p
+      );
+      set({ plots });
+      audio.sfx('ui');
+      get().save();
+    },
+
     upgradePlot: (plotId) => {
       const state = get();
       const plot = state.plots.find((p) => p.id === plotId);
@@ -1537,6 +1587,13 @@ export const useGame = create<GameState>((set, get) => {
       }
     }
 
+    // a founder arrives in town when the quest that reveals them is completed
+    for (const npc of NPCS) {
+      if (npc.reveal === id) {
+        get().addToast(`${npc.name} has arrived in New Greenwood — seek them out.`, 'quest', '✦');
+      }
+    }
+
     const r = def.rewards;
     const patch: Partial<GameState> = {
       quests,
@@ -1675,6 +1732,11 @@ export const useGame = create<GameState>((set, get) => {
   /** Speculator makes a tempting buyout offer on one of your businesses. */
   function spawnSpeculatorOffer() {
     const s = get();
+    // the speculator only slinks into town after dark
+    if (!isNightTime(s.timeOfDay)) {
+      set({ nextSpeculatorIn: 25 });
+      return;
+    }
     const targets = s.plots.filter(
       (p) => p.building && p.construction === 0 && BUILDINGS[p.building].income > 0
     );
@@ -1682,10 +1744,15 @@ export const useGame = create<GameState>((set, get) => {
       set({ nextSpeculatorIn: 40 });
       return;
     }
-    const p = targets[Math.floor(Math.random() * targets.length)];
+    // he covets your crown jewel — the most valuable business in town
+    const p = targets.reduce((best, c) =>
+      BUILDINGS[c.building!].income * c.level > BUILDINGS[best.building!].income * best.level ? c : best
+    );
     const cfg = BUILDINGS[p.building!];
+    // a thin war chest makes the cash dangerously tempting — he bids higher
+    const desperation = s.bswx < 150 ? 1.35 : s.bswx < 400 ? 1.15 : 1;
     const amount = Math.round(
-      SPECULATOR_BASE + cfg.income * p.level * SPECULATOR_VALUE_MULT * (0.9 + Math.random() * 0.4)
+      (SPECULATOR_BASE + cfg.income * p.level * SPECULATOR_VALUE_MULT) * desperation * (0.9 + Math.random() * 0.4)
     );
     set({
       speculatorOffer: {

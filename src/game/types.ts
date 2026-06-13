@@ -85,6 +85,9 @@ export interface NPCDef {
   hat: 'tophat' | 'bowler' | 'headwrap' | 'crown' | 'none';
   bio: string;
   gossip: string[];
+  /** quest id that must be DONE before this founder appears in town.
+   *  Undefined = present from the start (the opening guide, O.W. Gurley). */
+  reveal?: string;
 }
 
 export type QuestObjectiveKind =

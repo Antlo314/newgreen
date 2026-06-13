@@ -89,6 +89,17 @@ export const GRID = 4; // cell size in meters
 export const BUILD_AREA_HALF = 40; // buildable region is [-40, 40] in x/z
 export const PLAZA_KEEP = 7.5; // keep the plaza/monument clear of buildings
 
+// Founder huts ring — small homes the founders retire into off-hours. Kept
+// permanently clear of player building so a hut never ends up inside a shop.
+// These mirror each NPCDef.home in data.ts (source of truth for the geometry).
+export const HUT_SPOTS: { x: number; z: number }[] = [
+  { x: -16, z: -12 }, // O.W. Gurley
+  { x: 16, z: -12 }, // Sarah Rector
+  { x: -16, z: 12 }, // J.B. Stradford
+  { x: -8, z: 18 }, // Pharoah Gerumba
+];
+const HUT_KEEP = 3.4; // radius around each hut the player can't build in
+
 /** Snap a world coordinate to the center of its grid cell. */
 export function snapToGrid(v: number): number {
   return Math.round(v / GRID) * GRID;
@@ -106,6 +117,12 @@ export function canBuildAt(
   if (Math.abs(x) > BUILD_AREA_HALF || Math.abs(z) > BUILD_AREA_HALF) return false;
   // keep the central plaza & monument clear
   if (x * x + z * z < PLAZA_KEEP * PLAZA_KEEP) return false;
+  // keep the founders' huts clear
+  for (const h of HUT_SPOTS) {
+    const dx = h.x - x;
+    const dz = h.z - z;
+    if (dx * dx + dz * dz < HUT_KEEP * HUT_KEEP) return false;
+  }
   // not in (or right beside) the river — this is what stops building in water
   if (Math.abs(x - RIVER_X) < RIVER_WIDTH / 2 + 2) return false;
   // not on a standing resource node

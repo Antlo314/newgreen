@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { WalkRef } from './Humanoid';
 import SkinnedCharacter from './SkinnedCharacter';
 import { useGame } from '../../src/game/store';
-import { BOARD_POS, BUILDINGS, LENDER_POS, NPCS, npcSpot, QUESTS, RESOURCE_LABEL } from '../../src/game/data';
+import { BOARD_POS, BUILDINGS, LENDER_POS, NPCS, npcOpen, npcRevealed, QUESTS, RESOURCE_LABEL } from '../../src/game/data';
 
 const QUEST_GIVER: Record<string, string> = Object.fromEntries(
   QUESTS.map((q) => [q.id, q.giver])
@@ -145,6 +145,9 @@ export default function Player() {
       }
     }
 
+    // winded: with no stamina left you can only trudge until you rest or eat
+    if (speed > 0 && useGame.getState().stamina <= 0) speed *= 0.45;
+
     // moving cancels an in-progress harvest
     if (speed > 0.5 && s.harvesting) s.cancelHarvest();
 
@@ -270,9 +273,12 @@ function collides(x: number, z: number, s: GS, fx: number, fz: number): boolean 
       if (!inside || deeper) return true;
     }
   }
-  // npcs
+  // founders: their post blocks only while they're on the clock; their hut
+  // blocks always, once they've arrived in town
   for (const npc of NPCS) {
-    if (circleBlocks(x, z, fx, fz, npc.x, npc.z, 0.5 + PLAYER_R)) return true;
+    if (!npcRevealed(npc.id, s.quests)) continue;
+    if (npcOpen(npc, s.timeOfDay) && circleBlocks(x, z, fx, fz, npc.x, npc.z, 0.5 + PLAYER_R)) return true;
+    if (circleBlocks(x, z, fx, fz, npc.home.x, npc.home.z, 1.7 + PLAYER_R)) return true;
   }
   return false;
 }
@@ -287,24 +293,23 @@ function updateInteractTarget(x: number, z: number, s: GS) {
   let best: InteractTarget | null = null;
   let bestD = INTERACT_RANGE * INTERACT_RANGE;
 
-  // npcs — located by their daily schedule (post by day, home off-hours)
+  // founders — only those who've arrived in town and are at their post.
+  // Off-hours they're home inside their hut (hidden), so no prompt appears.
   for (const npc of NPCS) {
-    const spot = npcSpot(npc, s.timeOfDay);
-    const d = (x - spot.x) ** 2 + (z - spot.z) ** 2;
+    if (!npcRevealed(npc.id, s.quests) || !npcOpen(npc, s.timeOfDay)) continue;
+    const d = (x - npc.x) ** 2 + (z - npc.z) ** 2;
     if (d < bestD + 1.2) {
-      const hasQuest =
-        spot.open &&
-        Object.entries(s.quests).some(
-          ([id, q]) =>
-            (q.status === 'available' || q.status === 'ready') && QUEST_GIVER[id] === npc.id
-        );
+      const hasQuest = Object.entries(s.quests).some(
+        ([id, q]) =>
+          (q.status === 'available' || q.status === 'ready') && QUEST_GIVER[id] === npc.id
+      );
       best = {
         kind: 'npc',
         id: npc.id,
-        label: npc.name + (hasQuest ? ' — has business with you' : spot.open ? '' : ' (off the clock)'),
+        label: npc.name + (hasQuest ? ' — has business with you' : ''),
         verb: 'Talk',
-        x: spot.x,
-        z: spot.z,
+        x: npc.x,
+        z: npc.z,
       };
       bestD = d;
     }

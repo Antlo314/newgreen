@@ -6,6 +6,7 @@ import type {
   NPCDef,
   ProvisionDef,
   QuestDef,
+  QuestProgress,
   TownGoal,
 } from './types';
 
@@ -123,7 +124,7 @@ export const NPCS: NPCDef[] = [
     title: 'Founder & Visionary',
     x: 2,
     z: -3,
-    home: { x: -22, z: -14 },
+    home: { x: -16, z: -12 },
     hours: [7, 19],
     color: '#8d5524',
     hat: 'tophat',
@@ -134,6 +135,7 @@ export const NPCS: NPCDef[] = [
       'Family cottages strengthen every business in town. Homes first, then commerce thrives.',
       'The northern pines grow back quickly. Harvest with a steady rhythm and the forest provides forever.',
     ],
+    // the opening guide — always present from the very start
   },
   {
     id: 'rector',
@@ -141,7 +143,7 @@ export const NPCS: NPCDef[] = [
     title: 'Oil Heiress & Investor',
     x: 14,
     z: 9,
-    home: { x: 30, z: 20 },
+    home: { x: 16, z: -12 },
     hours: [9, 21],
     color: '#5d4037',
     hat: 'headwrap',
@@ -152,6 +154,7 @@ export const NPCS: NPCDef[] = [
       'The riverbank clay south of town is rich and red. Buildings made with it stand for generations.',
       'Watch the ledger, not the crowd. Steady income beats a loud promise every time.',
     ],
+    reveal: 'open_for_business',
   },
   {
     id: 'stradford',
@@ -159,7 +162,7 @@ export const NPCS: NPCDef[] = [
     title: 'Hotelier & Advocate',
     x: -13,
     z: 8,
-    home: { x: -28, z: 16 },
+    home: { x: -16, z: 12 },
     hours: [12, 24],
     color: '#3e2723',
     hat: 'bowler',
@@ -170,6 +173,7 @@ export const NPCS: NPCDef[] = [
       'Every family deserves a roof of their own. Cottages are the bedrock of this community.',
       'Quarry stone east of the river is dense and true. Worth every swing of the pick.',
     ],
+    reveal: 'ledger_grows',
   },
   {
     id: 'gerumba',
@@ -177,7 +181,7 @@ export const NPCS: NPCDef[] = [
     title: 'Keeper of Legacies',
     x: -4,
     z: 16,
-    home: { x: -16, z: 30 },
+    home: { x: -8, z: 18 },
     hours: [17, 7],
     color: '#4e342e',
     hat: 'crown',
@@ -188,6 +192,7 @@ export const NPCS: NPCDef[] = [
       'The stars favor Greenwood tonight. Walk the streets after dusk and feel the lamplight warm.',
       'A community garden feeds more than bodies — it feeds belonging.',
     ],
+    reveal: 'banking_tomorrow',
   },
 ];
 
@@ -204,6 +209,39 @@ export function npcOpen(npc: NPCDef, timeOfDay: number): boolean {
 export function npcSpot(npc: NPCDef, timeOfDay: number): { x: number; z: number; open: boolean } {
   const open = npcOpen(npc, timeOfDay);
   return open ? { x: npc.x, z: npc.z, open } : { x: npc.home.x, z: npc.home.z, open };
+}
+
+/** Has this founder been revealed yet? They arrive one-by-one as the player
+ *  completes the main story, so the early game is a calm, guided tutorial. */
+export function npcRevealed(npcId: string, quests: Record<string, QuestProgress>): boolean {
+  const npc = NPC_BY_ID[npcId];
+  if (!npc?.reveal) return true;
+  return quests[npc.reveal]?.status === 'done';
+}
+
+/** Is it night right now? Daytime shops slump after dark; the rhythm matters. */
+export function isNightTime(timeOfDay: number): boolean {
+  return timeOfDay < 0.27 || timeOfDay > 0.73;
+}
+
+/** How a building's income scales at night. Daytime trades quiet down after
+ *  dark, but hospitality & culture (hotel, Sugar Bowl, Cultural Hall) come
+ *  alive — so a well-rounded town earns around the clock. */
+export const NIGHT_INCOME_FACTOR: Record<BuildingId, number> = {
+  cottage: 1, // no income anyway
+  grocery: 0.4,
+  sugarbowl: 1.5,
+  workshop: 0.4,
+  bank: 0.6,
+  hotel: 1.6,
+  cultural_hall: 1.3,
+  garden: 0.5,
+};
+
+/** Income multiplier for one building given the time of day. */
+export function incomeTimeFactor(building: BuildingId, timeOfDay: number): number {
+  if (!isNightTime(timeOfDay)) return 1;
+  return NIGHT_INCOME_FACTOR[building] ?? 0.5;
 }
 
 /** Human-readable open window, e.g. "7am–7pm" or "5pm–7am". */

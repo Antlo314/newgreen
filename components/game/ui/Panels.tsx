@@ -269,6 +269,12 @@ function BuildMenu() {
           <div className="text-center text-[11px] text-amber-300">★ Fully upgraded ★</div>
         )}
         <button
+          onClick={() => s.rotatePlot(plot.id)}
+          className="w-full rounded-lg border border-sky-400/40 bg-sky-500/10 px-3 py-2 text-[11px] font-bold text-sky-200 transition hover:bg-sky-500/20"
+        >
+          ⟳ Rotate 90°
+        </button>
+        <button
           onClick={() => s.demolishPlot(plot.id)}
           className="w-full rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-2 text-[11px] font-bold text-red-200 transition hover:bg-red-500/20"
         >
@@ -772,13 +778,17 @@ function HelpPanel() {
       <Section h="Interacting">
         Walk up to anything highlighted with a golden ring and press <Kbd>E</Kbd> (or tap the action button on mobile):
         chop pines 🌲, mine quarry rock 🪨, dig riverbank clay 🧱, talk to townsfolk, or manage a building.
-        Harvesting costs stamina — it recovers when you rest.
+      </Section>
+      <Section h="Stamina">
+        Working <b>and walking</b> both burn stamina (the green STA bar). Run it dry and you&apos;ll trudge until you
+        recover — stand still to catch your breath (faster after dark) or grab a <b>provision</b> 🍞/🥧 at the Exchange
+        for an instant refill. Plan your routes; don&apos;t sprint clear across the district on an empty tank.
       </Section>
       <Section h="Building & Placement">
         Press <Kbd>B</Kbd> (or the Build button) to open the Land Office, choose a building, then place it{' '}
         <b>anywhere</b> on the grid around the plaza — move the mouse / tap to position, <Kbd>R</Kbd> to rotate, and{' '}
         <Kbd>E</Kbd> or <b>Place</b> to build (green = clear, red = blocked, e.g. water or another building). Walk up to
-        a finished building and press <Kbd>E</Kbd> to upgrade or demolish &amp; relocate it.
+        a finished building and press <Kbd>E</Kbd> to upgrade, <b>rotate</b> it 90°, or demolish &amp; relocate it.
       </Section>
       <Section h="The Circulation Economy">
         Greenwood prospers when the dollar stays home. <b>Gardens</b> grow 🌾 food; <b>cottages</b> bring residents who
@@ -804,6 +814,12 @@ function HelpPanel() {
         will offer big money for your businesses: sell out for quick cash and lost reputation, or refuse and keep
         Greenwood whole.
       </Section>
+      <Section h="Day &amp; Night">
+        The clock matters. <b>By day</b> the groceries, workshop and bank do their best trade; <b>after dark</b> those
+        quiet down while the <b>hotel, Sugar Bowl and Cultural Hall</b> come alive — so a well-rounded town earns around
+        the clock. Gardens only grow food in daylight, you rest faster at night, and a certain <b>🎩 speculator</b> only
+        prowls for businesses to buy once the sun is down.
+      </Section>
       <Section h="Fortunes & Hard Times">
         The town&apos;s luck swings: <b>🎉 Festivals</b> and <b>📈 booms</b> lift your income, while a <b>📉 Panic</b> or{' '}
         <b>🥀 Blight</b> (the screen reddens) cuts it or stops your gardens. Keep a buffer of food and BSWX so the bad
@@ -811,8 +827,10 @@ function HelpPanel() {
       </Section>
       <Section h="Quests & Townsfolk">
         Blue markers = new quests. Gold markers = ready to turn in. Press <Kbd>Q</Kbd> for the quest log,{' '}
-        <Kbd>I</Kbd> for inventory, <Kbd>M</Kbd> for the map. The founders keep their own hours — catch them at their
-        posts by day; after hours they head home and won&apos;t talk business, so plan your errands around the clock.
+        <Kbd>I</Kbd> for inventory, <Kbd>M</Kbd> for the map. The <b>founders arrive one at a time</b> as you complete
+        the main story — each shows up with their name floating above them, ready to teach you the next part of the game.
+        They keep their own hours too: catch them at their posts by day; after hours they head into their huts and
+        vanish until morning, so plan your errands around the clock.
       </Section>
       <Section h="Town Goals">
         Beyond the story, there&apos;s always a <b>🎯 Town Goal</b> on screen — grow your population, reputation, and
