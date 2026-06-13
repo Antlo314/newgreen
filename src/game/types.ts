@@ -144,6 +144,10 @@ export interface QuestProgress {
 export type SkillId = 'vigor' | 'labor' | 'haggle' | 'stride';
 export type Skills = Record<SkillId, number>;
 
+// Civic improvements — town-wide upgrades bought with BSWX (a persistent sink).
+export type CivicId = 'roads' | 'lamps' | 'school' | 'waterworks' | 'commerce';
+export type Civics = Record<CivicId, number>;
+
 export type HairStyle = 'classic' | 'fade' | 'afro' | 'locs' | 'braids' | 'puffs' | 'waves' | 'bald';
 export type HatStyle = 'none' | 'cap' | 'bowler' | 'tophat' | 'headwrap';
 export type AccessoryStyle = 'none' | 'glasses' | 'earrings' | 'bowtie';
@@ -188,6 +192,7 @@ export type PanelId =
   | 'speculator'
   | 'board'
   | 'charter'
+  | 'civic'
   | 'help'
   | 'settings';
 

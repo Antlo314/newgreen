@@ -5,6 +5,8 @@ import type {
   LoanTier,
   NPCDef,
   ProvisionDef,
+  CivicId,
+  Civics,
   Plot,
   QuestDef,
   QuestProgress,
@@ -713,6 +715,44 @@ export const FOUNDER_BOONS: BoonDef[] = [
     unlock: 'banking_tomorrow',
   },
 ];
+
+// ---------------------------------------------------------------------------
+// CIVIC IMPROVEMENTS — town-wide upgrades the player invests BSWX into. A
+// persistent late-game money sink whose payoffs ease flow and lift the economy.
+// ---------------------------------------------------------------------------
+
+export interface CivicDef {
+  id: CivicId;
+  name: string;
+  icon: string;
+  desc: string;
+  maxLevel: number;
+  baseCost: number; // BSWX for the first level
+  costMult: number; // multiplies each subsequent level
+  perLevel: string; // short effect summary for the UI
+}
+
+export const CIVICS: CivicDef[] = [
+  { id: 'roads', name: 'Paved Roads', icon: '🛣️', desc: 'Smooth brick streets across the district.', maxLevel: 3, baseCost: 80, costMult: 1.8, perLevel: '+7% move speed' },
+  { id: 'lamps', name: 'Street Lamps', icon: '💡', desc: 'Gaslight keeps the avenues busy after dark.', maxLevel: 3, baseCost: 120, costMult: 1.8, perLevel: '+10% night income' },
+  { id: 'school', name: 'Cooperative School', icon: '🏫', desc: 'The community teaches its own.', maxLevel: 3, baseCost: 100, costMult: 1.8, perLevel: '+8% experience' },
+  { id: 'waterworks', name: 'Waterworks', icon: '🚰', desc: 'Irrigation & cisterns feed the town.', maxLevel: 3, baseCost: 90, costMult: 1.8, perLevel: '+2 food / tick' },
+  { id: 'commerce', name: 'Chamber of Commerce', icon: '🏦', desc: 'Cooperative trade lifts every ledger.', maxLevel: 3, baseCost: 150, costMult: 2.0, perLevel: '+5% all income' },
+];
+
+export const emptyCivics = (): Civics => ({ roads: 0, lamps: 0, school: 0, waterworks: 0, commerce: 0 });
+
+/** BSWX cost to raise a civic upgrade from `level` to `level+1`. */
+export function civicCost(def: CivicDef, level: number): number {
+  return Math.round(def.baseCost * Math.pow(def.costMult, level));
+}
+
+// derived civic effects
+export const civicIncomeMult = (c: Civics) => 1 + (c.commerce ?? 0) * 0.05;
+export const civicNightMult = (c: Civics) => 1 + (c.lamps ?? 0) * 0.1;
+export const civicXpMult = (c: Civics) => 1 + (c.school ?? 0) * 0.08;
+export const civicSpeedMult = (c: Civics) => 1 + (c.roads ?? 0) * 0.07;
+export const civicFoodBonus = (c: Civics) => (c.waterworks ?? 0) * 2;
 
 export function boonActive(npc: string, quests: Record<string, QuestProgress>): boolean {
   const boon = FOUNDER_BOONS.find((b) => b.npc === npc);

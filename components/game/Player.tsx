@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { WalkRef } from './Humanoid';
 import SkinnedCharacter from './SkinnedCharacter';
 import { useGame } from '../../src/game/store';
-import { BOARD_POS, BUILDINGS, LENDER_POS, NPCS, npcOpen, npcRevealed, QUESTS, RESOURCE_LABEL } from '../../src/game/data';
+import { BOARD_POS, BUILDINGS, civicSpeedMult, LENDER_POS, NPCS, npcOpen, npcRevealed, QUESTS, RESOURCE_LABEL } from '../../src/game/data';
 
 const QUEST_GIVER: Record<string, string> = Object.fromEntries(
   QUESTS.map((q) => [q.id, q.giver])
@@ -129,7 +129,7 @@ export default function Player() {
       if (k['d'] || k['arrowright']) tmpDir.x += 1;
     }
 
-    const baseSpeed = SPEED * (1 + (s.skills.stride ?? 0) * STRIDE_PER_PT);
+    const baseSpeed = SPEED * (1 + (s.skills.stride ?? 0) * STRIDE_PER_PT) * civicSpeedMult(s.civics);
     const wantSprint = !inputBlocked && !!keys.current['shift'];
     let speed = 0;
     let sprinting = false;

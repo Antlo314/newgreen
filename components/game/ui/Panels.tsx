@@ -6,6 +6,8 @@ import {
   adjacencyInfo,
   boonActive,
   BUILDINGS,
+  CIVICS,
+  civicCost,
   FOUNDER_BOONS,
   LOAN_TIERS,
   MAX_BUILDING_LEVEL,
@@ -38,6 +40,7 @@ export default function Panels() {
       {panel === 'speculator' && <Modal title="An Outside Offer"><SpeculatorPanel /></Modal>}
       {panel === 'board' && <Modal title="Community Board"><BoardPanel /></Modal>}
       {panel === 'charter' && <Modal title="Charter a New District"><CharterPanel /></Modal>}
+      {panel === 'civic' && <Modal title="Town Improvements"><CivicPanel /></Modal>}
       {panel === 'help' && <Modal title="How to Play"><HelpPanel /></Modal>}
     </>
   );
@@ -204,6 +207,15 @@ function Inventory() {
 
       <SkillsSection />
       <BoonsSection />
+
+      {s.quests['first_foundations']?.status === 'done' && (
+        <button
+          onClick={() => s.setPanel('civic')}
+          className="w-full rounded-xl border border-sky-400/40 bg-sky-500/10 py-2.5 text-xs font-bold text-sky-100 transition hover:bg-sky-500/20"
+        >
+          🏛️ Town Improvements
+        </button>
+      )}
 
       {s.quests['legacy_restored']?.status === 'done' && (
         <button
@@ -811,6 +823,56 @@ function BoardPanel() {
   );
 }
 
+function CivicPanel() {
+  const s = useGame();
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] leading-relaxed text-white/55">
+        Pool the community&apos;s BSWX into improvements that lift the whole district — permanent, and they carry across
+        every level you build.
+      </p>
+      <div className="space-y-2">
+        {CIVICS.map((def) => {
+          const lvl = s.civics[def.id] ?? 0;
+          const maxed = lvl >= def.maxLevel;
+          const cost = civicCost(def, lvl);
+          const afford = s.bswx >= cost;
+          return (
+            <div key={def.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-white">
+                  {def.icon} {def.name}
+                </span>
+                <span className="flex gap-0.5">
+                  {Array.from({ length: def.maxLevel }).map((_, i) => (
+                    <span key={i} className={`h-1.5 w-3 rounded-sm ${i < lvl ? 'bg-sky-400' : 'bg-white/15'}`} />
+                  ))}
+                </span>
+              </div>
+              <div className="mt-0.5 text-[10px] text-white/55">
+                {def.desc} <span className="text-sky-200/70">({def.perLevel} / level)</span>
+              </div>
+              <button
+                disabled={maxed || !afford}
+                onClick={() => s.buyCivic(def.id)}
+                className={`mt-2 w-full rounded-lg border px-3 py-1.5 text-[11px] font-bold transition ${
+                  maxed
+                    ? 'cursor-default border-amber-400/30 bg-amber-400/5 text-amber-300'
+                    : afford
+                      ? 'border-sky-400/50 bg-sky-400/15 text-sky-100 hover:bg-sky-400/25'
+                      : 'cursor-not-allowed border-white/10 bg-white/5 text-white/35'
+                }`}
+              >
+                {maxed ? '★ Fully improved' : `Improve to Lv ${lvl + 1} — ◆${cost}`}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function CharterPanel() {
   const s = useGame();
   const eligible = s.quests['legacy_restored']?.status === 'done';
@@ -954,6 +1016,11 @@ function HelpPanel() {
         <b>Labor</b> (harvest), <b>Haggling</b> (trade) and <b>Stride</b> (speed) to sharpen your own craft. And as each
         founder joins New Greenwood, their <b>Boon</b> lends a permanent town-wide bonus — more income, better prices,
         faster building, extra XP. Both live in the Inventory.
+      </Section>
+      <Section h="Town Improvements">
+        Pool BSWX into civic upgrades from your <Kbd>I</Kbd> Inventory (<b>🏛️ Town Improvements</b>): <b>paved roads</b>{' '}
+        (move faster), <b>street lamps</b> (more night income), a <b>school</b> (more XP), <b>waterworks</b> (more food),
+        and a <b>chamber of commerce</b> (more income). They&apos;re permanent and a great place to spend a fat treasury.
       </Section>
       <Section h="Town Goals">
         Beyond the story, there&apos;s always a <b>🎯 Town Goal</b> on screen — grow your population, reputation, and

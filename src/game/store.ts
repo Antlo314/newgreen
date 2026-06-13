@@ -13,6 +13,13 @@ import {
   boonIncomeMult,
   boonMarketMult,
   boonXpMult,
+  CIVICS,
+  civicCost,
+  civicFoodBonus,
+  civicIncomeMult,
+  civicNightMult,
+  civicXpMult,
+  emptyCivics,
   emptySkills,
   incomeTimeFactor,
   isNightTime,
@@ -48,6 +55,8 @@ import type {
   MerchantState,
   PanelId,
   PlacingState,
+  CivicId,
+  Civics,
   PlayerAppearance,
   Plot,
   QuestProgress,
@@ -217,6 +226,9 @@ interface GameState {
   skillPoints: number;
   skills: Skills;
 
+  // civic improvements (town-wide BSWX-bought upgrades)
+  civics: Civics;
+
   // world
   nodes: ResourceNode[];
   nodesVersion: number;
@@ -281,6 +293,7 @@ interface GameState {
   backToMenu: () => void;
   setPlayerPos: (x: number, z: number, facing: number, moving: boolean, sprinting?: boolean) => void;
   spendSkill: (id: SkillId) => void;
+  buyCivic: (id: CivicId) => void;
   setMoveTarget: (t: { x: number; z: number } | null) => void;
   setInteractTarget: (t: InteractTarget | null) => void;
   setPanel: (p: PanelId) => void;
@@ -355,6 +368,7 @@ function freshPlayerState() {
     sprinting: false,
     skillPoints: 0,
     skills: emptySkills(),
+    civics: emptyCivics(),
     nodes: generateResourceNodes(),
     nodesVersion: 0,
     plots: [] as Plot[],
@@ -477,7 +491,7 @@ export const useGame = create<GameState>((set, get) => {
 
   function grantXp(rawAmount: number) {
     const state = get();
-    const amount = rawAmount * boonXpMult(state.quests);
+    const amount = rawAmount * boonXpMult(state.quests) * civicXpMult(state.civics);
     let xp = state.xp + amount;
     let level = state.level;
     let staminaMax = state.staminaMax;
@@ -644,6 +658,25 @@ export const useGame = create<GameState>((set, get) => {
       set(patch as never);
       audio.sfx('questAccept');
       get().addToast(`${id[0].toUpperCase()}${id.slice(1)} raised to ${cur + 1}.`, 'reward', '★');
+      get().save();
+    },
+
+    buyCivic: (id) => {
+      const s = get();
+      const def = CIVICS.find((c) => c.id === id);
+      if (!def) return;
+      const lvl = s.civics[id] ?? 0;
+      if (lvl >= def.maxLevel) return;
+      const cost = civicCost(def, lvl);
+      if (s.bswx < cost) {
+        get().addToast('Not enough BSWX for that improvement.', 'warn', '!');
+        audio.sfx('error');
+        return;
+      }
+      set({ bswx: s.bswx - cost, civics: { ...s.civics, [id]: lvl + 1 } });
+      audio.sfx('coin');
+      audio.playLevelUp();
+      get().addToast(`${def.name} improved to level ${lvl + 1}!`, 'reward', def.icon);
       get().save();
     },
     setInteractTarget: (interactTarget) => {
@@ -820,7 +853,10 @@ export const useGame = create<GameState>((set, get) => {
 
         // 1) gardens grow food in daylight (a blight or nightfall stops them)
         const daytime = !isNightTime(s.timeOfDay);
-        let food = Math.min(FOOD_CAP, s.food + (fortune?.foodOff || !daytime ? 0 : levelOf('garden')));
+        let food = Math.min(
+          FOOD_CAP,
+          s.food + (fortune?.foodOff || !daytime ? 0 : levelOf('garden')) + civicFoodBonus(s.civics)
+        );
 
         // 2) families eat — a fed town prospers, a hungry one falters
         const need = population * FOOD_PER_RESIDENT;
@@ -870,7 +906,14 @@ export const useGame = create<GameState>((set, get) => {
         }
         income += foodSold * FOOD_PRICE + goodsSold * GOODS_PRICE;
         income = Math.round(
-          income * mult * (fortune?.incomeMult ?? 1) * legacyMult * INCOME_SCALE * boonIncomeMult(s.quests)
+          income *
+            mult *
+            (fortune?.incomeMult ?? 1) *
+            legacyMult *
+            INCOME_SCALE *
+            boonIncomeMult(s.quests) *
+            civicIncomeMult(s.civics) *
+            (isNightTime(s.timeOfDay) ? civicNightMult(s.civics) : 1)
         );
 
         // market prices drift like a real exchange
@@ -1375,7 +1418,7 @@ export const useGame = create<GameState>((set, get) => {
         const perTick = passiveIncomePerTick(
           s.plots,
           s.circulation,
-          legacyMultiplier(s.legacy) * boonIncomeMult(s.quests)
+          legacyMultiplier(s.legacy) * boonIncomeMult(s.quests) * civicIncomeMult(s.civics)
         );
         const reward = Math.max(RUSH_MIN, Math.round(perTick * RUSH_TICK_VALUE * rand(0.8, 1.4)));
         earn(reward);
@@ -1634,7 +1677,7 @@ export const useGame = create<GameState>((set, get) => {
           food: s.food, goods: s.goods, marketPrices: s.marketPrices, circulation: s.circulation,
           stamina: s.stamina, staminaMax: s.staminaMax,
           reputation: s.reputation, level: s.level, xp: s.xp, totalEarned: s.totalEarned,
-          skillPoints: s.skillPoints, skills: s.skills,
+          skillPoints: s.skillPoints, skills: s.skills, civics: s.civics,
           timeOfDay: s.timeOfDay, day: s.day,
           quests: s.quests, trackedQuest: s.trackedQuest,
           plots: s.plots,
@@ -2003,13 +2046,18 @@ function loadSave(): Partial<GameState> | null {
       .map((p) => ({ ...p, rot: p.rot ?? 0 }));
     const circulation = data.circulation ?? 1;
     const legacy: LegacyState = data.legacy ?? { tokens: 0, district: 1 };
+    const civics: Civics = { ...emptyCivics(), ...(data.civics ?? {}) };
 
     // offline earnings — accrue passive income for time spent away (capped)
     let welcomeBack: WelcomeBack | null = null;
     if (data.lastSeen) {
       const elapsed = Math.max(0, (Date.now() - data.lastSeen) / 1000);
       if (elapsed >= OFFLINE_MIN_SECONDS) {
-        const perTick = passiveIncomePerTick(plots, circulation, legacyMultiplier(legacy) * boonIncomeMult(quests));
+        const perTick = passiveIncomePerTick(
+          plots,
+          circulation,
+          legacyMultiplier(legacy) * boonIncomeMult(quests) * civicIncomeMult(civics)
+        );
         if (perTick > 0) {
           const ticks = Math.floor(Math.min(elapsed, OFFLINE_CAP) / ECONOMY_TICK);
           const bswx = Math.round(perTick * ticks * OFFLINE_EFFICIENCY);
@@ -2039,6 +2087,7 @@ function loadSave(): Partial<GameState> | null {
       // existing saves get one retroactive point per level already earned
       skillPoints: data.skillPoints ?? Math.max(0, (data.level ?? 1) - 1),
       skills: { ...emptySkills(), ...(data.skills ?? {}) },
+      civics,
       sprinting: false,
       timeOfDay: data.timeOfDay ?? 0.32,
       day: data.day ?? 1,
