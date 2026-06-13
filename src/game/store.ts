@@ -8,6 +8,7 @@ import {
   GARDEN_INCOME_BONUS,
   GOALS,
   goalAt,
+  adjacencyInfo,
   boonBuildFactor,
   boonIncomeMult,
   boonMarketMult,
@@ -177,7 +178,7 @@ function passiveIncomePerTick(plots: Plot[], circulation: number, legacyMult = 1
   let gardens = 0;
   for (const p of plots) {
     if (!p.building || p.construction > 0) continue;
-    base += BUILDINGS[p.building].income * p.level;
+    base += BUILDINGS[p.building].income * p.level * adjacencyInfo(p.building, p.x, p.z, plots, p.id).mult;
     if (p.building === 'cottage') cottages++;
     if (p.building === 'garden') gardens++;
   }
@@ -858,7 +859,11 @@ export const useGame = create<GameState>((set, get) => {
         let income = 0;
         for (const p of s.plots) {
           if (!p.building || p.construction > 0) continue;
-          income += BUILDINGS[p.building].income * p.level * incomeTimeFactor(p.building, s.timeOfDay);
+          income +=
+            BUILDINGS[p.building].income *
+            p.level *
+            incomeTimeFactor(p.building, s.timeOfDay) *
+            adjacencyInfo(p.building, p.x, p.z, s.plots, p.id).mult;
         }
         income += foodSold * FOOD_PRICE + goodsSold * GOODS_PRICE;
         income = Math.round(

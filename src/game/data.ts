@@ -5,6 +5,7 @@ import type {
   LoanTier,
   NPCDef,
   ProvisionDef,
+  Plot,
   QuestDef,
   QuestProgress,
   SkillId,
@@ -114,6 +115,84 @@ export const UPGRADE_COST_MULT = 1.7;
 export const MAX_BUILDING_LEVEL = 3;
 export const COTTAGE_INCOME_BONUS = 0.1;
 export const GARDEN_INCOME_BONUS = 0.05;
+
+// ---------------------------------------------------------------------------
+// PLACEMENT SYNERGIES — a building earns more when good neighbors sit beside it
+// (within one tile). Reward thoughtful districts, not just non-overlapping ones.
+// ---------------------------------------------------------------------------
+
+export const ADJACENCY_RANGE = 6.1; // ~one grid cell away (incl. diagonals)
+export const ADJACENCY_CAP = 0.5; // a single building caps at +50% from neighbors
+
+/** building → { neighbor type: income bonus per such neighbor nearby }. */
+export const SYNERGY: Partial<Record<BuildingId, Partial<Record<BuildingId, number>>>> = {
+  grocery: { cottage: 0.08, garden: 0.04 }, // locals shop where they live
+  sugarbowl: { cottage: 0.06, cultural_hall: 0.08 }, // a social sweet-spot
+  workshop: { bank: 0.08, garden: 0.04 }, // financed, well-sited crafts
+  bank: { grocery: 0.05, workshop: 0.05, hotel: 0.06 }, // serves nearby commerce
+  hotel: { cultural_hall: 0.1, garden: 0.05 }, // attractions & pleasant grounds
+  cultural_hall: { hotel: 0.08, garden: 0.06, cottage: 0.04 }, // a living heart
+  garden: { cottage: 0.1 }, // community gardens by the homes
+};
+
+export interface SynergyPart {
+  type: BuildingId;
+  count: number;
+  pct: number;
+}
+
+/** Neighbor income multiplier for a (possibly hypothetical) building at x,z. */
+export function adjacencyInfo(
+  building: BuildingId | null,
+  x: number,
+  z: number,
+  plots: Plot[],
+  selfId?: string
+): { mult: number; bonus: number; parts: SynergyPart[] } {
+  const rules = building ? SYNERGY[building] : undefined;
+  if (!building || !rules) return { mult: 1, bonus: 0, parts: [] };
+  const parts: SynergyPart[] = [];
+  let bonus = 0;
+  for (const key of Object.keys(rules) as BuildingId[]) {
+    const per = rules[key];
+    if (!per) continue;
+    let count = 0;
+    for (const o of plots) {
+      if (o.id === selfId || o.building !== key || o.construction > 0) continue;
+      const dx = o.x - x;
+      const dz = o.z - z;
+      if (dx * dx + dz * dz <= ADJACENCY_RANGE * ADJACENCY_RANGE) count++;
+    }
+    if (count > 0) {
+      bonus += per * count;
+      parts.push({ type: key, count, pct: per * count });
+    }
+  }
+  bonus = Math.min(ADJACENCY_CAP, bonus);
+  return { mult: 1 + bonus, bonus, parts };
+}
+
+/** The operational neighbor plots a building at x,z would synergize with — used
+ *  to highlight good spots while placing. */
+export function synergyNeighborPlots(
+  building: BuildingId | null,
+  x: number,
+  z: number,
+  plots: Plot[],
+  selfId?: string
+): Plot[] {
+  const rules = building ? SYNERGY[building] : undefined;
+  if (!building || !rules) return [];
+  const res: Plot[] = [];
+  for (const o of plots) {
+    if (o.id === selfId || !o.building || o.construction > 0) continue;
+    if (!(o.building in rules)) continue;
+    const dx = o.x - x;
+    const dz = o.z - z;
+    if (dx * dx + dz * dz <= ADJACENCY_RANGE * ADJACENCY_RANGE) res.push(o);
+  }
+  return res;
+}
 
 // ---------------------------------------------------------------------------
 // NPCS

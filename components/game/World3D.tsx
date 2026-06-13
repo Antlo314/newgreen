@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { useGame } from '../../src/game/store';
 import { audio } from '../../src/game/audio';
 import { Building } from './Buildings';
-import { BUILDINGS } from '../../src/game/data';
+import { BUILDINGS, synergyNeighborPlots } from '../../src/game/data';
 import type { Plot } from '../../src/game/types';
 import {
   BRIDGE_HALF_WIDTH,
@@ -39,7 +39,44 @@ export default function World3D() {
       <EventBeacon />
       <BuildGrid />
       <PlacementGhost />
+      <SynergyHints />
     </group>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// While placing, ring the neighbors the current cell would synergize with, so
+// good spots are obvious at a glance.
+// ---------------------------------------------------------------------------
+
+function SynergyHints() {
+  const placing = useGame((s) => s.placing);
+  const plots = useGame((s) => s.plots);
+  if (!placing) return null;
+  const neighbors = synergyNeighborPlots(placing.buildingId, placing.x, placing.z, plots);
+  if (neighbors.length === 0) return null;
+  return (
+    <group>
+      {neighbors.map((p) => (
+        <SynergyRing key={p.id} x={p.x} z={p.z} />
+      ))}
+    </group>
+  );
+}
+
+function SynergyRing({ x, z }: { x: number; z: number }) {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame((state) => {
+    if (!ref.current) return;
+    const t = state.clock.elapsedTime;
+    ref.current.scale.setScalar(1 + Math.sin(t * 4) * 0.12);
+    (ref.current.material as THREE.MeshBasicMaterial).opacity = 0.5 + Math.sin(t * 4) * 0.2;
+  });
+  return (
+    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.09, z]}>
+      <ringGeometry args={[1.4, 1.7, 28]} />
+      <meshBasicMaterial color="#34d399" transparent opacity={0.6} depthWrite={false} />
+    </mesh>
   );
 }
 

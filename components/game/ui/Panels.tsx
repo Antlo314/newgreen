@@ -3,6 +3,7 @@
 import React from 'react';
 import { useGame } from '../../../src/game/store';
 import {
+  adjacencyInfo,
   boonActive,
   BUILDINGS,
   FOUNDER_BOONS,
@@ -335,6 +336,7 @@ function BuildMenu() {
   // managing an existing building (walked up + pressed E)
   if (plot?.building) {
     const cfg = BUILDINGS[plot.building];
+    const syn = adjacencyInfo(plot.building, plot.x, plot.z, s.plots, plot.id);
     const canUpgrade = plot.level < MAX_BUILDING_LEVEL;
     const mult = Math.pow(UPGRADE_COST_MULT, plot.level);
     const afford =
@@ -349,7 +351,15 @@ function BuildMenu() {
           <div className="mt-0.5 text-[11px] text-amber-300">Level {plot.level} / {MAX_BUILDING_LEVEL}</div>
           <div className="mt-1 text-[11px] text-white/65">{cfg.desc}</div>
           {cfg.income > 0 && (
-            <div className="mt-1 text-[11px] text-emerald-300">Income: ◆{cfg.income * plot.level} per tick</div>
+            <div className="mt-1 text-[11px] text-emerald-300">
+              Income: ◆{cfg.income * plot.level} per tick
+              {syn.bonus > 0 && <span className="text-amber-300"> · +{Math.round(syn.bonus * 100)}% synergy</span>}
+            </div>
+          )}
+          {syn.parts.length > 0 && (
+            <div className="mt-1 text-[10px] text-amber-200/70">
+              ✦ Good neighbors: {syn.parts.map((p) => `${p.count}× ${BUILDINGS[p.type].name}`).join(', ')}
+            </div>
           )}
         </div>
         {canUpgrade ? (
@@ -398,7 +408,8 @@ function BuildMenu() {
     <div className="space-y-2">
       <p className="text-[11px] leading-relaxed text-white/55">
         Pick a building, then aim it on the grid around the plaza — <b>mouse/tap</b> to position, <b>R</b> to rotate,{' '}
-        <b>Place</b> to build.
+        <b>Place</b> to build. Set complementary buildings side-by-side for a <b className="text-amber-300">synergy</b>{' '}
+        income bonus — green rings light up the good neighbors as you aim.
       </p>
       {Object.values(BUILDINGS).map((cfg) => {
         const repOk = s.reputation >= cfg.repRequired;
@@ -889,6 +900,12 @@ function HelpPanel() {
         <b>anywhere</b> on the grid around the plaza — move the mouse / tap to position, <Kbd>R</Kbd> to rotate, and{' '}
         <Kbd>E</Kbd> or <b>Place</b> to build (green = clear, red = blocked, e.g. water or another building). Walk up to
         a finished building and press <Kbd>E</Kbd> to upgrade, <b>rotate</b> it 90°, or demolish &amp; relocate it.
+      </Section>
+      <Section h="Neighbor Synergies">
+        <b>Where</b> you build matters. Put complementary buildings next to each other — a grocery beside cottages, a
+        hotel beside the Cultural Hall, gardens around the homes — and each earns a <b>synergy</b> income bonus (up to
+        +50%). While placing, green rings highlight the neighbors you&apos;d pair with, and the readout shows the bonus
+        for the spot you&apos;re aiming at. Check any building&apos;s synergy by walking up and pressing <Kbd>E</Kbd>.
       </Section>
       <Section h="The Circulation Economy">
         Greenwood prospers when the dollar stays home. <b>Gardens</b> grow 🌾 food; <b>cottages</b> bring residents who

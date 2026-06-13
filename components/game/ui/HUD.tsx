@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { useGame } from '../../../src/game/store';
-import { goalAt, QUEST_BY_ID, xpForLevel } from '../../../src/game/data';
+import { adjacencyInfo, goalAt, QUEST_BY_ID, xpForLevel } from '../../../src/game/data';
 import { deriveResidents } from '../../../src/game/residents';
 import Minimap from './Minimap';
 
@@ -21,6 +21,7 @@ export default function HUD() {
       <HarvestPop />
       <GoalTracker />
       <PlacementControls />
+      <PlacementButtons />
       <Toasts />
       <HotkeyBar />
       <MobileControls />
@@ -488,6 +489,29 @@ function GoalTracker() {
 
 // Rotate / Place / Cancel controls shown while placing a building.
 function PlacementControls() {
+  const placing = useGame((s) => s.placing);
+  const plots = useGame((s) => s.plots);
+  const rotate = useGame((s) => s.rotatePlacing);
+  const confirm = useGame((s) => s.confirmPlacing);
+  const cancel = useGame((s) => s.cancelPlacing);
+  if (!placing) return null;
+  const syn = adjacencyInfo(placing.buildingId, placing.x, placing.z, plots);
+  return (
+    <div className="pointer-events-none absolute bottom-36 left-1/2 -translate-x-1/2 sm:bottom-40">
+      {syn.bonus > 0 ? (
+        <div className="rounded-full border border-amber-300/50 bg-black/70 px-3 py-1 text-[11px] font-bold text-amber-200 backdrop-blur-sm">
+          ✦ +{Math.round(syn.bonus * 100)}% synergy here
+        </div>
+      ) : (
+        <div className="rounded-full border border-white/15 bg-black/60 px-3 py-1 text-[11px] font-medium text-white/55 backdrop-blur-sm">
+          No neighbor synergy here
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlacementButtons() {
   const placing = useGame((s) => s.placing);
   const rotate = useGame((s) => s.rotatePlacing);
   const confirm = useGame((s) => s.confirmPlacing);
