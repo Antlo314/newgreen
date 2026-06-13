@@ -6,6 +6,7 @@ import type {
   NPCDef,
   ProvisionDef,
   QuestDef,
+  TownGoal,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -122,6 +123,8 @@ export const NPCS: NPCDef[] = [
     title: 'Founder & Visionary',
     x: 2,
     z: -3,
+    home: { x: -22, z: -14 },
+    hours: [7, 19],
     color: '#8d5524',
     hat: 'tophat',
     bio: 'Purchased 40 acres in 1906, dedicating it to Black business empowerment.',
@@ -138,6 +141,8 @@ export const NPCS: NPCDef[] = [
     title: 'Oil Heiress & Investor',
     x: 14,
     z: 9,
+    home: { x: 30, z: 20 },
+    hours: [9, 21],
     color: '#5d4037',
     hat: 'headwrap',
     bio: 'Her Creek Nation land allotment produced 2,500 barrels of oil daily.',
@@ -154,6 +159,8 @@ export const NPCS: NPCDef[] = [
     title: 'Hotelier & Advocate',
     x: -13,
     z: 8,
+    home: { x: -28, z: 16 },
+    hours: [12, 24],
     color: '#3e2723',
     hat: 'bowler',
     bio: 'Built the famed Stradford Hotel — 54 luxury suites of Black excellence.',
@@ -170,6 +177,8 @@ export const NPCS: NPCDef[] = [
     title: 'Keeper of Legacies',
     x: -4,
     z: 16,
+    home: { x: -16, z: 30 },
+    hours: [17, 7],
     color: '#4e342e',
     hat: 'crown',
     bio: 'Holds the interwoven indigenous and sovereign Black legacies of this land.',
@@ -183,6 +192,67 @@ export const NPCS: NPCDef[] = [
 ];
 
 export const NPC_BY_ID = Object.fromEntries(NPCS.map((n) => [n.id, n]));
+
+/** Is this founder at their post (available to talk) at the given time of day? */
+export function npcOpen(npc: NPCDef, timeOfDay: number): boolean {
+  const h = timeOfDay * 24;
+  const [open, close] = npc.hours;
+  return open <= close ? h >= open && h < close : h >= open || h < close;
+}
+
+/** Where a founder is right now — at their post when open, at home when closed. */
+export function npcSpot(npc: NPCDef, timeOfDay: number): { x: number; z: number; open: boolean } {
+  const open = npcOpen(npc, timeOfDay);
+  return open ? { x: npc.x, z: npc.z, open } : { x: npc.home.x, z: npc.home.z, open };
+}
+
+/** Human-readable open window, e.g. "7am–7pm" or "5pm–7am". */
+export function npcHoursLabel(npc: NPCDef): string {
+  const fmt = (h: number) => {
+    const hh = h % 24;
+    const ampm = hh < 12 ? 'am' : 'pm';
+    const disp = hh % 12 === 0 ? 12 : hh % 12;
+    return `${disp}${ampm}`;
+  };
+  return `${fmt(npc.hours[0])}–${fmt(npc.hours[1])}`;
+}
+
+// ---------------------------------------------------------------------------
+// ENDLESS TOWN GOALS — there is always a next objective, and it never ends.
+// ---------------------------------------------------------------------------
+
+export const GOALS: TownGoal[] = [
+  { kind: 'buildings', target: 1, label: 'Raise your first building', reward: { bswx: 30, xp: 40 } },
+  { kind: 'population', target: 3, label: 'Welcome 3 residents to Greenwood', reward: { bswx: 50, rep: 10, xp: 60 } },
+  { kind: 'reputation', target: 40, label: 'Earn 40 reputation', reward: { bswx: 80, xp: 80 } },
+  { kind: 'buildings', target: 6, label: 'Operate 6 buildings', reward: { bswx: 150, rep: 15, xp: 120 } },
+  { kind: 'population', target: 10, label: 'Grow to 10 residents', reward: { bswx: 200, rep: 20, xp: 150 } },
+  { kind: 'earned', target: 3000, label: 'Earn ◆3,000 in total', reward: { bswx: 250, rep: 20, xp: 180 } },
+  { kind: 'reputation', target: 140, label: 'Reach 140 reputation', reward: { bswx: 300, xp: 220 } },
+  { kind: 'population', target: 20, label: 'Grow to 20 residents', reward: { bswx: 400, rep: 30, xp: 260 } },
+  { kind: 'earned', target: 12000, label: 'Earn ◆12,000 in total', reward: { bswx: 600, rep: 30, xp: 320 } },
+];
+
+/** The goal at a given index — past the authored list, goals scale up forever. */
+export function goalAt(index: number): TownGoal {
+  if (index < GOALS.length) return GOALS[index];
+  const over = index - GOALS.length;
+  const step = Math.floor(over / 3) + 1;
+  switch (over % 3) {
+    case 0: {
+      const target = 30 + step * 10;
+      return { kind: 'population', target, label: `Grow to ${target} residents`, reward: { bswx: 500 * step, rep: 30, xp: 300 } };
+    }
+    case 1: {
+      const target = Math.round(20000 * Math.pow(1.6, step));
+      return { kind: 'earned', target, label: `Earn ◆${target.toLocaleString()} in total`, reward: { bswx: 800 * step, rep: 30, xp: 350 } };
+    }
+    default: {
+      const target = 160 + step * 40;
+      return { kind: 'reputation', target, label: `Reach ${target} reputation`, reward: { bswx: 600 * step, xp: 320 } };
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // QUESTS
@@ -201,7 +271,7 @@ export const QUESTS: QuestDef[] = [
     ],
     outro: [
       'Fine work! Feel that? That is the weight of a beginning.',
-      'Take this seed money — and claim a plot. Greenwood rises one storefront at a time.',
+      'Take this seed money — open the Land Office (press B) and raise your first storefront wherever you like.',
     ],
     objectives: [
       { kind: 'gather', target: 'wood', amount: 20, label: 'Gather 20 Lumber' },
@@ -217,7 +287,7 @@ export const QUESTS: QuestDef[] = [
     requires: 'first_foundations',
     intro: [
       'A community that feeds itself cannot be starved out. Our first business must be a grocery.',
-      'Find an open plot near the plaza — the golden markers — and raise the Greenwood Grocery.',
+      'Open the Land Office (press B), choose the Greenwood Grocery, and raise it on open ground near the plaza.',
     ],
     outro: [
       'The shelves are stocked and the doors are open! Every coin spent here stays here.',

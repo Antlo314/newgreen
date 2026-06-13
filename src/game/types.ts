@@ -55,14 +55,32 @@ export interface Plot {
   level: number;
   /** seconds of construction remaining; 0 = operational */
   construction: number;
+  /** y-rotation in radians (0 / 90 / 180 / 270) */
+  rot: number;
+}
+
+/** Live state while the player is placing a building on the grid. */
+export interface PlacingState {
+  buildingId: BuildingId;
+  x: number;
+  z: number;
+  rot: number;
+  /** whether the current cell is a legal place to build */
+  valid: boolean;
 }
 
 export interface NPCDef {
   id: string;
   name: string;
   title: string;
+  /** daytime post (where they conduct business) */
   x: number;
   z: number;
+  /** where they retire when off the clock */
+  home: { x: number; z: number };
+  /** hours they are at their post & available, as [open, close) on a 24h clock.
+   *  open > close means an overnight shift (e.g. [18, 6]). */
+  hours: [number, number];
   color: string;
   hat: 'tophat' | 'bowler' | 'headwrap' | 'crown' | 'none';
   bio: string;
@@ -300,6 +318,20 @@ export interface SpeculatorOffer {
   z: number;
   timeLeft: number;
   duration: number;
+}
+
+// ---------------------------------------------------------------------------
+// Endless town goals — there is always a next objective
+// ---------------------------------------------------------------------------
+
+export type GoalKind = 'buildings' | 'population' | 'reputation' | 'earned' | 'level';
+
+export interface TownGoal {
+  kind: GoalKind;
+  target: number;
+  label: string;
+  /** rewards for completing this goal */
+  reward: { bswx?: number; rep?: number; xp?: number };
 }
 
 export type FortuneKind = 'festival' | 'boom' | 'panic' | 'blight';

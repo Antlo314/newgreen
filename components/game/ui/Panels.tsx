@@ -214,14 +214,10 @@ function costLine(c: BuildingConfig['cost'], mult = 1) {
 
 function BuildMenu() {
   const s = useGame();
-  const plot = s.plots.find((p) => p.id === s.selectedPlot);
+  const plot = s.plots.find((p) => p.id === s.selectedPlot && p.building);
 
-  if (!plot) {
-    return <div className="text-xs text-white/60">Stand near an open plot (golden markers) and press E to build.</div>;
-  }
-
-  // managing an existing building
-  if (plot.building) {
+  // managing an existing building (walked up + pressed E)
+  if (plot?.building) {
     const cfg = BUILDINGS[plot.building];
     const canUpgrade = plot.level < MAX_BUILDING_LEVEL;
     const mult = Math.pow(UPGRADE_COST_MULT, plot.level);
@@ -255,23 +251,33 @@ function BuildMenu() {
         ) : (
           <div className="text-center text-[11px] text-amber-300">★ Fully upgraded ★</div>
         )}
+        <button
+          onClick={() => s.demolishPlot(plot.id)}
+          className="w-full rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-2 text-[11px] font-bold text-red-200 transition hover:bg-red-500/20"
+        >
+          Demolish &amp; relocate (salvage ~40% materials)
+        </button>
       </div>
     );
   }
 
-  // empty plot: catalog
+  // catalog — choose a building to place freely on the grid
   const unlocked = s.quests['first_foundations']?.status === 'done';
   if (!unlocked) {
     return (
       <div className="text-xs text-white/60">
         Complete <span className="font-semibold text-amber-300">First Foundations</span> for O.W. Gurley before the land
-        office will lease you a plot.
+        office will let you build.
       </div>
     );
   }
 
   return (
     <div className="space-y-2">
+      <p className="text-[11px] leading-relaxed text-white/55">
+        Pick a building, then aim it on the grid around the plaza — <b>mouse/tap</b> to position, <b>R</b> to rotate,{' '}
+        <b>Place</b> to build.
+      </p>
       {Object.values(BUILDINGS).map((cfg) => {
         const repOk = s.reputation >= cfg.repRequired;
         const questOk = !cfg.questRequired || s.quests[cfg.questRequired]?.status === 'done';
@@ -285,7 +291,7 @@ function BuildMenu() {
           <button
             key={cfg.id}
             disabled={locked || !afford}
-            onClick={() => s.buildOnPlot(plot.id, cfg.id)}
+            onClick={() => s.startPlacing(cfg.id)}
             className={`w-full rounded-lg border p-2.5 text-left transition ${
               locked
                 ? 'cursor-not-allowed border-white/5 bg-white/[0.02] opacity-50'
@@ -645,8 +651,14 @@ function HelpPanel() {
       </Section>
       <Section h="Interacting">
         Walk up to anything highlighted with a golden ring and press <Kbd>E</Kbd> (or tap the action button on mobile):
-        chop pines 🌲, mine quarry rock 🪨, dig riverbank clay 🧱, talk to townsfolk, or build on open plots.
+        chop pines 🌲, mine quarry rock 🪨, dig riverbank clay 🧱, talk to townsfolk, or manage a building.
         Harvesting costs stamina — it recovers when you rest.
+      </Section>
+      <Section h="Building & Placement">
+        Press <Kbd>B</Kbd> (or the Build button) to open the Land Office, choose a building, then place it{' '}
+        <b>anywhere</b> on the grid around the plaza — move the mouse / tap to position, <Kbd>R</Kbd> to rotate, and{' '}
+        <Kbd>E</Kbd> or <b>Place</b> to build (green = clear, red = blocked, e.g. water or another building). Walk up to
+        a finished building and press <Kbd>E</Kbd> to upgrade or demolish &amp; relocate it.
       </Section>
       <Section h="The Circulation Economy">
         Greenwood prospers when the dollar stays home. <b>Gardens</b> grow 🌾 food; <b>cottages</b> bring residents who
@@ -677,9 +689,14 @@ function HelpPanel() {
         <b>🥀 Blight</b> (the screen reddens) cuts it or stops your gardens. Keep a buffer of food and BSWX so the bad
         spells can&apos;t sink you.
       </Section>
-      <Section h="Quests">
+      <Section h="Quests & Townsfolk">
         Blue markers = new quests. Gold markers = ready to turn in. Press <Kbd>Q</Kbd> for the quest log,{' '}
-        <Kbd>I</Kbd> for inventory, <Kbd>M</Kbd> for the map.
+        <Kbd>I</Kbd> for inventory, <Kbd>M</Kbd> for the map. The founders keep their own hours — catch them at their
+        posts by day; after hours they head home and won&apos;t talk business, so plan your errands around the clock.
+      </Section>
+      <Section h="Town Goals">
+        Beyond the story, there&apos;s always a <b>🎯 Town Goal</b> on screen — grow your population, reputation, and
+        earnings. Reach one and the next, bigger goal appears. Greenwood never stops growing.
       </Section>
       <Section h="Saving">Your progress autosaves every few seconds and when you return to the menu.</Section>
       <div className="pt-2.5 border-t border-white/10">

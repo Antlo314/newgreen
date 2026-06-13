@@ -5,7 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { WalkRef } from './Humanoid';
 import SkinnedCharacter from './SkinnedCharacter';
-import { NPCS, QUESTS } from '../../src/game/data';
+import { NPCS, npcSpot, QUESTS } from '../../src/game/data';
 import { DEFAULT_APPEARANCE } from '../../src/game/customization';
 import { useGame } from '../../src/game/store';
 import type { NPCDef, PlayerAppearance } from '../../src/game/types';
@@ -34,7 +34,10 @@ export default function NPCs() {
   );
 }
 
+const NPC_SPEED = 3.2;
+
 function NPC({ def }: { def: NPCDef }) {
+  const root = useRef<THREE.Group>(null);
   const group = useRef<THREE.Group>(null);
   const walkRef = useRef<WalkRef>({ speed: 0 });
   const marker = useRef<THREE.Mesh>(null);
@@ -42,28 +45,44 @@ function NPC({ def }: { def: NPCDef }) {
 
   const questIds = useMemo(() => QUESTS.filter((q) => q.giver === def.id).map((q) => q.id), [def.id]);
 
-  useFrame((state) => {
+  useFrame((state, dt) => {
     const t = state.clock.elapsedTime;
-    if (group.current) {
-      // gentle idle sway / turning toward player when near
-      const s = useGame.getState();
-      const dx = s.px - def.x;
-      const dz = s.pz - def.z;
-      const d2 = dx * dx + dz * dz;
-      if (d2 < 30) {
-        const target = Math.atan2(dx, dz);
-        const cur = group.current.rotation.y;
-        let diff = target - cur;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        group.current.rotation.y = cur + diff * 0.05;
-      } else {
-        group.current.rotation.y = Math.sin(t * 0.3 + seed) * 0.6;
+    const s = useGame.getState();
+    const spot = npcSpot(def, s.timeOfDay);
+    const r = root.current;
+    let speed = 0;
+    if (r) {
+      // walk toward the scheduled spot (post by day, home off-hours)
+      const dx = spot.x - r.position.x;
+      const dz = spot.z - r.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > 0.05) {
+        const step = Math.min(dist, NPC_SPEED * dt);
+        r.position.x += (dx / dist) * step;
+        r.position.z += (dz / dist) * step;
+        speed = step / Math.max(dt, 0.001);
       }
     }
-    // quest marker
+    walkRef.current.speed = speed;
+
+    if (group.current && r) {
+      let target: number;
+      if (speed > 0.3) {
+        target = Math.atan2(spot.x - r.position.x, spot.z - r.position.z);
+      } else {
+        const pdx = s.px - r.position.x;
+        const pdz = s.pz - r.position.z;
+        if (spot.open && pdx * pdx + pdz * pdz < 30) target = Math.atan2(pdx, pdz);
+        else target = Math.sin(t * 0.3 + seed) * 0.6;
+      }
+      let diff = target - group.current.rotation.y;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      group.current.rotation.y += diff * (speed > 0.3 ? 0.18 : 0.05);
+    }
+
+    // quest marker — only when they're at their post and available
     if (marker.current) {
-      const s = useGame.getState();
       let kind: 'none' | 'avail' | 'ready' = 'none';
       for (const id of questIds) {
         const st = s.quests[id]?.status;
@@ -73,7 +92,7 @@ function NPC({ def }: { def: NPCDef }) {
         }
         if (st === 'available') kind = 'avail';
       }
-      marker.current.visible = kind !== 'none';
+      marker.current.visible = spot.open && kind !== 'none';
       marker.current.position.y = 2.25 + Math.sin(t * 3 + seed) * 0.08;
       const m = marker.current.material as THREE.MeshBasicMaterial;
       m.color.set(kind === 'ready' ? '#ffd54f' : '#7dd3fc');
@@ -98,7 +117,7 @@ function NPC({ def }: { def: NPCDef }) {
   );
 
   return (
-    <group position={[def.x, 0, def.z]}>
+    <group ref={root} position={[def.x, 0, def.z]}>
       <group ref={group}>
         <SkinnedCharacter appearance={appearance} walkRef={walkRef} />
       </group>

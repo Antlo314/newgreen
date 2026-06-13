@@ -6,9 +6,12 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import { useGame } from '../../src/game/store';
 import { audio } from '../../src/game/audio';
+import { BUILDINGS } from '../../src/game/data';
 import {
   BRIDGE_HALF_WIDTH,
   BRIDGE_Z,
+  BUILD_AREA_HALF,
+  GRID,
   RIVER_WIDTH,
   RIVER_X,
   WORLD_HALF,
@@ -32,6 +35,8 @@ export default function World3D() {
       <MoveMarker />
       <InteractHighlight />
       <EventBeacon />
+      <BuildGrid />
+      <PlacementGhost />
     </group>
   );
 }
@@ -116,7 +121,17 @@ function Ground() {
     audio.unlock();
     const s = useGame.getState();
     if (s.phase !== 'playing' || s.dialogue) return;
+    // while placing a building, a ground tap aims the ghost (doesn't move you)
+    if (s.placing) {
+      s.movePlacing(e.point.x, e.point.z);
+      return;
+    }
     s.setMoveTarget({ x: e.point.x, z: e.point.z });
+  };
+
+  const onPointerMove = (e: ThreeEvent<PointerEvent>) => {
+    const s = useGame.getState();
+    if (s.placing) s.movePlacing(e.point.x, e.point.z);
   };
 
   return (
@@ -125,10 +140,64 @@ function Ground() {
       position={[0, 0, 0]}
       receiveShadow
       onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
     >
       <planeGeometry args={[WORLD_HALF * 2 + 30, WORLD_HALF * 2 + 30]} />
       <meshStandardMaterial color="#4d8a4a" roughness={1} />
     </mesh>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Free-placement build grid + ghost preview (shown only while placing).
+// ---------------------------------------------------------------------------
+
+function BuildGrid() {
+  const placing = useGame((s) => s.placing !== null);
+  const ref = useRef<THREE.GridHelper>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    const mats = Array.isArray(ref.current.material) ? ref.current.material : [ref.current.material];
+    for (const m of mats) {
+      (m as THREE.Material).transparent = true;
+      (m as THREE.Material).opacity = 0.28;
+    }
+  });
+  if (!placing) return null;
+  const size = BUILD_AREA_HALF * 2;
+  return <gridHelper ref={ref} args={[size, size / GRID, '#ffd54f', '#5f7a52']} position={[0, 0.05, 0]} />;
+}
+
+function PlacementGhost() {
+  const placing = useGame((s) => s.placing);
+  const ref = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    const pl = useGame.getState().placing;
+    if (!ref.current || !pl) return;
+    ref.current.position.set(pl.x, 0, pl.z);
+    ref.current.rotation.y = pl.rot;
+    ref.current.scale.setScalar(1 + Math.sin(state.clock.elapsedTime * 4) * 0.03);
+  });
+  if (!placing) return null;
+  const fp = BUILDINGS[placing.buildingId].footprint;
+  const color = placing.valid ? '#6ee7b7' : '#f87171';
+  return (
+    <group ref={ref} position={[placing.x, 0, placing.z]} rotation={[0, placing.rot, 0]}>
+      <mesh position={[0, 1, 0]}>
+        <boxGeometry args={[fp, 2, fp * 0.85]} />
+        <meshBasicMaterial color={color} transparent opacity={0.32} depthWrite={false} />
+      </mesh>
+      {/* square footprint ring on the cell */}
+      <mesh rotation={[-Math.PI / 2, Math.PI / 4, 0]} position={[0, 0.07, 0]}>
+        <ringGeometry args={[fp * 0.62, fp * 0.62 + 0.22, 4]} />
+        <meshBasicMaterial color={color} transparent opacity={0.85} depthWrite={false} />
+      </mesh>
+      {/* arrow marking the building's front (faces -z by default) */}
+      <mesh position={[0, 0.12, -fp * 0.62]} rotation={[-Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[0.38, 0.7, 3]} />
+        <meshBasicMaterial color={color} transparent opacity={0.95} depthWrite={false} />
+      </mesh>
+    </group>
   );
 }
 

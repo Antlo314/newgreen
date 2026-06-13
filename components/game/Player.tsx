@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { WalkRef } from './Humanoid';
 import SkinnedCharacter from './SkinnedCharacter';
 import { useGame } from '../../src/game/store';
-import { BUILDINGS, LENDER_POS, NPCS, QUESTS, RESOURCE_LABEL } from '../../src/game/data';
+import { BUILDINGS, LENDER_POS, NPCS, npcSpot, QUESTS, RESOURCE_LABEL } from '../../src/game/data';
 
 const QUEST_GIVER: Record<string, string> = Object.fromEntries(
   QUESTS.map((q) => [q.id, q.giver])
@@ -44,10 +44,16 @@ export default function Player() {
       if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
       const s = useGame.getState();
       if (k === 'e' || k === 'enter' || k === ' ') {
-        s.interact();
+        if (s.placing) s.confirmPlacing();
+        else s.interact();
+      } else if (k === 'r') {
+        if (s.placing) s.rotatePlacing();
       } else if (k === 'escape') {
-        if (s.dialogue) s.declineDialogue();
+        if (s.placing) s.cancelPlacing();
+        else if (s.dialogue) s.declineDialogue();
         else s.setPanel(null);
+      } else if (k === 'b') {
+        if (!s.placing) s.setPanel(s.panel === 'build' ? null : 'build');
       } else if (k === 'q' || k === 'j') {
         s.setPanel(s.panel === 'quests' ? null : 'quests');
       } else if (k === 'i') {
@@ -272,26 +278,33 @@ function collides(x: number, z: number, s: GS, fx: number, fz: number): boolean 
 }
 
 function updateInteractTarget(x: number, z: number, s: GS) {
+  // no world interactions while aiming a building placement
+  if (s.placing) {
+    s.setInteractTarget(null);
+    return;
+  }
+
   let best: InteractTarget | null = null;
   let bestD = INTERACT_RANGE * INTERACT_RANGE;
 
-  // npcs
+  // npcs — located by their daily schedule (post by day, home off-hours)
   for (const npc of NPCS) {
-    const d = (x - npc.x) ** 2 + (z - npc.z) ** 2;
+    const spot = npcSpot(npc, s.timeOfDay);
+    const d = (x - spot.x) ** 2 + (z - spot.z) ** 2;
     if (d < bestD + 1.2) {
       const hasQuest =
+        spot.open &&
         Object.entries(s.quests).some(
           ([id, q]) =>
-            (q.status === 'available' || q.status === 'ready') &&
-            QUEST_GIVER[id] === npc.id
+            (q.status === 'available' || q.status === 'ready') && QUEST_GIVER[id] === npc.id
         );
       best = {
         kind: 'npc',
         id: npc.id,
-        label: npc.name + (hasQuest ? ' — has business with you' : ''),
+        label: npc.name + (hasQuest ? ' — has business with you' : spot.open ? '' : ' (off the clock)'),
         verb: 'Talk',
-        x: npc.x,
-        z: npc.z,
+        x: spot.x,
+        z: spot.z,
       };
       bestD = d;
     }
@@ -306,25 +319,20 @@ function updateInteractTarget(x: number, z: number, s: GS) {
       bestD = d;
     }
   }
-  // plots / buildings
-  const plotsUnlocked = s.quests['first_foundations']?.status === 'done';
+  // buildings (manage / upgrade)
   for (const p of s.plots) {
+    if (!p.building || p.construction !== 0) continue;
     const d = (x - p.x) ** 2 + (z - p.z) ** 2;
-    const range = p.building ? (BUILDINGS[p.building].footprint / 2 + 1.6) ** 2 : bestD;
-    if (p.building) {
-      if (d < Math.min(bestD, range) && p.construction === 0) {
-        best = {
-          kind: 'building',
-          id: p.id,
-          label: `${BUILDINGS[p.building].name} (Lv ${p.level})`,
-          verb: 'Manage',
-          x: p.x,
-          z: p.z,
-        };
-        bestD = d;
-      }
-    } else if (plotsUnlocked && d < bestD) {
-      best = { kind: 'plot', id: p.id, label: 'Open Plot', verb: 'Build', x: p.x, z: p.z };
+    const range = (BUILDINGS[p.building].footprint / 2 + 1.6) ** 2;
+    if (d < Math.min(bestD, range)) {
+      best = {
+        kind: 'building',
+        id: p.id,
+        label: `${BUILDINGS[p.building].name} (Lv ${p.level})`,
+        verb: 'Manage',
+        x: p.x,
+        z: p.z,
+      };
       bestD = d;
     }
   }

@@ -9,7 +9,6 @@ import type { BuildingId, Plot } from '../../src/game/types';
 
 export default function Buildings() {
   const plots = useGame((s) => s.plots);
-  const plotsUnlocked = useGame((s) => s.quests['first_foundations']?.status === 'done');
 
   return (
     <group>
@@ -20,39 +19,13 @@ export default function Buildings() {
           ) : (
             <Building key={p.id} plot={p} />
           )
-        ) : (
-          <PlotMarker key={p.id} plot={p} unlocked={plotsUnlocked} />
-        )
+        ) : null
       )}
     </group>
   );
 }
 
 // ---------------------------------------------------------------------------
-
-function PlotMarker({ plot, unlocked }: { plot: Plot; unlocked: boolean }) {
-  const ref = useRef<THREE.Mesh>(null);
-  useFrame((state) => {
-    if (!ref.current) return;
-    const m = ref.current.material as THREE.MeshBasicMaterial;
-    m.opacity = unlocked ? 0.35 + Math.sin(state.clock.elapsedTime * 2 + plot.x) * 0.15 : 0.12;
-  });
-  return (
-    <group position={[plot.x, 0, plot.z]}>
-      <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
-        <planeGeometry args={[3.2, 3.2]} />
-        <meshBasicMaterial color={unlocked ? '#e8c33a' : '#888888'} transparent opacity={0.2} />
-      </mesh>
-      {/* corner stakes */}
-      {[[-1.5, -1.5], [1.5, -1.5], [-1.5, 1.5], [1.5, 1.5]].map(([x, z], i) => (
-        <mesh key={i} position={[x, 0.25, z]} castShadow>
-          <boxGeometry args={[0.1, 0.5, 0.1]} />
-          <meshStandardMaterial color="#8a6b43" roughness={0.9} />
-        </mesh>
-      ))}
-    </group>
-  );
-}
 
 function ConstructionSite({ plot }: { plot: Plot }) {
   const ref = useRef<THREE.Group>(null);
@@ -64,7 +37,7 @@ function ConstructionSite({ plot }: { plot: Plot }) {
     ref.current.scale.y = 0.2 + k * 0.8;
   });
   return (
-    <group position={[plot.x, 0, plot.z]}>
+    <group position={[plot.x, 0, plot.z]} rotation={[0, plot.rot, 0]}>
       <group ref={ref}>
         <mesh position={[0, 0.8, 0]} castShadow>
           <boxGeometry args={[2.4, 1.6, 2.4]} />
@@ -107,7 +80,7 @@ function Building({ plot }: { plot: Plot }) {
   const lvlScale = 1 + (plot.level - 1) * 0.12;
 
   return (
-    <group position={[plot.x, 0, plot.z]} scale={lvlScale}>
+    <group position={[plot.x, 0, plot.z]} rotation={[0, plot.rot, 0]} scale={lvlScale}>
       {id === 'garden' ? (
         <Garden level={plot.level} />
       ) : id === 'cottage' ? (

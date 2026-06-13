@@ -80,29 +80,53 @@ export function generateResourceNodes(): ResourceNode[] {
   return nodes;
 }
 
-// Build plots arranged around the plaza in a town-grid pattern.
+// ---------------------------------------------------------------------------
+// Free-placement build grid. The player places buildings anywhere on a grid
+// surrounding the plaza, snapped to GRID-sized cells.
+// ---------------------------------------------------------------------------
+
+export const GRID = 4; // cell size in meters
+export const BUILD_AREA_HALF = 40; // buildable region is [-40, 40] in x/z
+export const PLAZA_KEEP = 7.5; // keep the plaza/monument clear of buildings
+
+/** Snap a world coordinate to the center of its grid cell. */
+export function snapToGrid(v: number): number {
+  return Math.round(v / GRID) * GRID;
+}
+
+/** Can a building be placed on the grid cell at (x, z)? x/z are already snapped. */
+export function canBuildAt(
+  x: number,
+  z: number,
+  nodes: ResourceNode[],
+  plots: Plot[],
+  excludeId?: string
+): boolean {
+  // inside the buildable area
+  if (Math.abs(x) > BUILD_AREA_HALF || Math.abs(z) > BUILD_AREA_HALF) return false;
+  // keep the central plaza & monument clear
+  if (x * x + z * z < PLAZA_KEEP * PLAZA_KEEP) return false;
+  // not in (or right beside) the river — this is what stops building in water
+  if (Math.abs(x - RIVER_X) < RIVER_WIDTH / 2 + 2) return false;
+  // not on a standing resource node
+  for (const n of nodes) {
+    if (n.hp <= 0) continue;
+    const dx = n.x - x;
+    const dz = n.z - z;
+    if (dx * dx + dz * dz < 2.6 * 2.6) return false;
+  }
+  // not on an occupied cell
+  for (const p of plots) {
+    if (!p.building || p.id === excludeId) continue;
+    if (Math.abs(p.x - x) < GRID - 0.5 && Math.abs(p.z - z) < GRID - 0.5) return false;
+  }
+  return true;
+}
+
+// The live game now starts with no plots and lets the player place buildings
+// freely on the grid.
 export function generatePlots(): Plot[] {
-  const positions: [number, number][] = [
-    // main street (east-west) north side
-    [-9, -8], [-3, -8], [3, -8], [9, -8],
-    // main street south side
-    [-9, 8], [-3, 8], [3, 8], [9, 8],
-    // avenue (north-south) west side
-    [-16, -2], [-16, 4],
-    // avenue east side
-    [16, -2], [16, 4],
-    // outer residential ring
-    [-22, 12], [-14, 16], [14, 16], [22, 12],
-    [-22, -12], [22, -12],
-  ];
-  return positions.map(([x, z], i) => ({
-    id: `p${i}`,
-    x,
-    z,
-    building: null,
-    level: 0,
-    construction: 0,
-  }));
+  return [];
 }
 
 // Decorative elements (lampposts, plaza tiles handled in renderer)

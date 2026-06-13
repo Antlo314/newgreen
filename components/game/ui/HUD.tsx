@@ -2,7 +2,7 @@
 
 import React, { useMemo } from 'react';
 import { useGame } from '../../../src/game/store';
-import { QUEST_BY_ID, xpForLevel } from '../../../src/game/data';
+import { goalAt, QUEST_BY_ID, xpForLevel } from '../../../src/game/data';
 import { deriveResidents } from '../../../src/game/residents';
 import Minimap from './Minimap';
 
@@ -19,6 +19,8 @@ export default function HUD() {
       </div>
       <InteractPrompt />
       <HarvestPop />
+      <GoalTracker />
+      <PlacementControls />
       <Toasts />
       <HotkeyBar />
       <MobileControls />
@@ -261,7 +263,8 @@ function HotkeyBar() {
   const quests = useGame((s) => s.quests);
   const hasReady = Object.values(quests).some((q) => q.status === 'ready');
 
-  const items: { key: string; label: string; panel: 'quests' | 'inventory' | 'map' | 'market' | 'help'; badge?: boolean }[] = [
+  const items: { key: string; label: string; panel: 'quests' | 'inventory' | 'build' | 'map' | 'market' | 'help'; badge?: boolean }[] = [
+    { key: 'B', label: 'Build', panel: 'build' },
     { key: 'Q', label: 'Quests', panel: 'quests', badge: hasReady },
     { key: 'I', label: 'Inventory', panel: 'inventory' },
     { key: 'T', label: 'Market', panel: 'market' },
@@ -409,6 +412,90 @@ function LoanBadge() {
         ◆{loan.owed} <span className="font-normal text-white/50">· due day {loan.dueDay}</span>
       </div>
     </button>
+  );
+}
+
+// Persistent "always an objective" town-goal tracker (bottom-center).
+function GoalTracker() {
+  const goalIndex = useGame((s) => s.goalIndex);
+  const reputation = useGame((s) => s.reputation);
+  const totalEarned = useGame((s) => s.totalEarned);
+  const level = useGame((s) => s.level);
+  const plots = useGame((s) => s.plots);
+  const placing = useGame((s) => s.placing !== null);
+  if (placing) return null;
+
+  const goal = goalAt(goalIndex);
+  let val = 0;
+  switch (goal.kind) {
+    case 'buildings':
+      val = plots.filter((p) => p.building && p.construction === 0).length;
+      break;
+    case 'population':
+      val = deriveResidents(plots).length;
+      break;
+    case 'reputation':
+      val = reputation;
+      break;
+    case 'earned':
+      val = totalEarned;
+      break;
+    case 'level':
+      val = level;
+      break;
+  }
+  const pct = Math.max(0, Math.min(100, (val / goal.target) * 100));
+  return (
+    <div className="pointer-events-none absolute bottom-14 left-1/2 w-[min(90vw,300px)] -translate-x-1/2 sm:bottom-16">
+      <div className="rounded-xl border border-amber-300/30 bg-black/65 px-3 py-1.5 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-sm leading-none">🎯</span>
+          <div className="min-w-0 flex-1 truncate text-[11px] font-semibold text-amber-100">{goal.label}</div>
+          <span className="text-[10px] font-bold tabular-nums text-amber-300">
+            {Math.min(val, goal.target).toLocaleString()}/{goal.target.toLocaleString()}
+          </span>
+        </div>
+        <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/15">
+          <div className="h-full rounded-full bg-amber-400" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Rotate / Place / Cancel controls shown while placing a building.
+function PlacementControls() {
+  const placing = useGame((s) => s.placing);
+  const rotate = useGame((s) => s.rotatePlacing);
+  const confirm = useGame((s) => s.confirmPlacing);
+  const cancel = useGame((s) => s.cancelPlacing);
+  if (!placing) return null;
+  return (
+    <div className="pointer-events-auto absolute bottom-24 left-1/2 flex -translate-x-1/2 items-center gap-2 sm:bottom-28">
+      <button
+        onClick={cancel}
+        className="rounded-xl border border-white/20 bg-black/70 px-3 py-2 text-xs font-bold text-white/80 backdrop-blur-sm transition active:scale-95"
+      >
+        ✕ Cancel
+      </button>
+      <button
+        onClick={rotate}
+        className="rounded-xl border border-sky-400/50 bg-sky-500/20 px-3 py-2 text-xs font-bold text-sky-100 backdrop-blur-sm transition active:scale-95"
+      >
+        ⟳ Rotate
+      </button>
+      <button
+        onClick={confirm}
+        disabled={!placing.valid}
+        className={`rounded-xl border px-4 py-2 text-xs font-bold backdrop-blur-sm transition active:scale-95 ${
+          placing.valid
+            ? 'border-emerald-400/60 bg-emerald-500/25 text-emerald-100'
+            : 'cursor-not-allowed border-white/15 bg-white/5 text-white/40'
+        }`}
+      >
+        ✓ Place
+      </button>
+    </div>
   );
 }
 

@@ -2,12 +2,17 @@ import { create } from 'zustand';
 import {
   BUILDINGS,
   NPCS,
+  NPC_BY_ID,
   COTTAGE_INCOME_BONUS,
   FORTUNES,
   GARDEN_INCOME_BONUS,
+  GOALS,
+  goalAt,
   LOAN_TIERS,
   MAX_BUILDING_LEVEL,
   MERCHANT_POS,
+  npcOpen,
+  npcHoursLabel,
   PROVISIONS,
   QUESTS,
   QUEST_BY_ID,
@@ -16,7 +21,7 @@ import {
   UPGRADE_COST_MULT,
   xpForLevel,
 } from './data';
-import { generatePlots, generateResourceNodes } from './world';
+import { canBuildAt, generateResourceNodes, snapToGrid } from './world';
 import { CALLING_BY_ID, DEFAULT_APPEARANCE, randomName } from './customization';
 import { deriveResidents, employmentStats } from './residents';
 import type {
@@ -31,6 +36,7 @@ import type {
   MerchantDeal,
   MerchantState,
   PanelId,
+  PlacingState,
   PlayerAppearance,
   Plot,
   QuestProgress,
@@ -39,6 +45,7 @@ import type {
   ResourceType,
   SpeculatorOffer,
   Toast,
+  TownGoal,
   WelcomeBack,
 } from './types';
 import { audio } from './audio';
@@ -178,6 +185,10 @@ interface GameState {
   quests: Record<string, QuestProgress>;
   trackedQuest: string | null;
 
+  // free-placement building & endless goals
+  placing: PlacingState | null;
+  goalIndex: number;
+
   // live events, offline payout & harvest juice
   activeEvent: GameEvent | null;
   nextEventIn: number;
@@ -228,8 +239,13 @@ interface GameState {
   acceptQuest: () => void;
   declineDialogue: () => void;
   trackQuest: (id: string) => void;
-  buildOnPlot: (plotId: string, buildingId: BuildingId) => void;
+  startPlacing: (buildingId: BuildingId) => void;
+  movePlacing: (x: number, z: number) => void;
+  rotatePlacing: () => void;
+  confirmPlacing: () => void;
+  cancelPlacing: () => void;
   upgradePlot: (plotId: string) => void;
+  demolishPlot: (plotId: string) => void;
   sellResource: (type: MarketResource, amount: number) => void;
   buyResource: (type: Exclude<MarketResource, 'goods'>, amount: number) => void;
   buyProvision: (id: string) => void;
@@ -276,7 +292,8 @@ function freshPlayerState() {
     totalEarned: 0,
     nodes: generateResourceNodes(),
     nodesVersion: 0,
-    plots: generatePlots(),
+    plots: [] as Plot[],
+    goalIndex: 0,
     timeOfDay: 0.32,
     day: 1,
     food: 6,
@@ -300,6 +317,7 @@ export const useGame = create<GameState>((set, get) => {
   let eventId = 1;
   let popId = 1;
   let dealId = 1;
+  let plotSeq = 1;
 
   // ---- quest helpers (operate on draft-ish copies) ----
 
@@ -414,6 +432,7 @@ export const useGame = create<GameState>((set, get) => {
     phase: 'menu',
     hasSave: false,
     ...freshPlayerState(),
+    placing: null,
     activeEvent: null,
     nextEventIn: EVENT_FIRST_GAP,
     welcomeBack: null,
@@ -448,6 +467,7 @@ export const useGame = create<GameState>((set, get) => {
             dialogue: null,
             harvesting: null,
             moveTarget: null,
+            placing: null,
             activeEvent: null,
             nextEventIn: EVENT_FIRST_GAP,
             harvestPop: null,
@@ -488,6 +508,7 @@ export const useGame = create<GameState>((set, get) => {
         dialogue: null,
         harvesting: null,
         moveTarget: null,
+        placing: null,
         activeEvent: null,
         nextEventIn: EVENT_FIRST_GAP,
         welcomeBack: null,
@@ -735,6 +756,7 @@ export const useGame = create<GameState>((set, get) => {
           set({ reputation: get().reputation + fortune.repPerTick });
           checkReputationObjectives();
         }
+        checkGoals();
       }
 
       // ------------------------------------------------------------------
@@ -913,6 +935,12 @@ export const useGame = create<GameState>((set, get) => {
 
     talkTo: (npcId) => {
       const state = get();
+      const npc = NPC_BY_ID[npcId];
+      if (npc && !npcOpen(npc, state.timeOfDay)) {
+        audio.sfx('error');
+        get().addToast(`${npc.name} is off the clock. Find them at their post (${npcHoursLabel(npc)}).`, 'warn', '🌙');
+        return;
+      }
       audio.sfx('talk');
       applyQuestEvent('talk', npcId, 1);
 
@@ -993,35 +1021,102 @@ export const useGame = create<GameState>((set, get) => {
 
     trackQuest: (id) => set({ trackedQuest: id }),
 
-    buildOnPlot: (plotId, buildingId) => {
-      const state = get();
-      const plot = state.plots.find((p) => p.id === plotId);
+    startPlacing: (buildingId) => {
+      const s = get();
       const cfg = BUILDINGS[buildingId];
-      if (!plot || plot.building || !cfg) return;
-      const c = cfg.cost;
-      if (
-        state.wood < c.wood ||
-        state.stone < c.stone ||
-        state.clay < (c.clay ?? 0) ||
-        state.bswx < (c.bswx ?? 0)
-      ) {
-        get().addToast('Not enough resources for that.', 'warn', '!');
+      if (!cfg) return;
+      if (s.quests['first_foundations']?.status !== 'done') {
+        get().addToast('Complete First Foundations before you can build.', 'warn', '!');
         return;
       }
-      const plots = state.plots.map((p) =>
-        p.id === plotId ? { ...p, building: buildingId, level: 1, construction: 6 } : p
-      );
+      // start the ghost a few cells in front of the player
+      const x = snapToGrid(s.px);
+      const z = snapToGrid(s.pz - 8);
+      const valid = canBuildAt(x, z, s.nodes, s.plots);
+      audio.sfx('ui');
+      set({ placing: { buildingId, x, z, rot: 0, valid }, panel: null, selectedPlot: null, moveTarget: null });
+      get().addToast('Aim with the mouse, R to rotate, then Place.', 'info', '⚒');
+    },
+
+    movePlacing: (rawX, rawZ) => {
+      const s = get();
+      if (!s.placing) return;
+      const x = snapToGrid(rawX);
+      const z = snapToGrid(rawZ);
+      if (x === s.placing.x && z === s.placing.z) return;
+      const valid = canBuildAt(x, z, s.nodes, s.plots);
+      set({ placing: { ...s.placing, x, z, valid } });
+    },
+
+    rotatePlacing: () => {
+      const s = get();
+      if (!s.placing) return;
+      audio.sfx('ui');
+      set({ placing: { ...s.placing, rot: (s.placing.rot + Math.PI / 2) % (Math.PI * 2) } });
+    },
+
+    cancelPlacing: () => {
+      if (get().placing) {
+        audio.sfx('ui');
+        set({ placing: null });
+      }
+    },
+
+    confirmPlacing: () => {
+      const s = get();
+      const pl = s.placing;
+      if (!pl) return;
+      const cfg = BUILDINGS[pl.buildingId];
+      if (!canBuildAt(pl.x, pl.z, s.nodes, s.plots)) {
+        get().addToast('Can’t build there — find open ground away from the water.', 'warn', '!');
+        audio.sfx('error');
+        return;
+      }
+      const c = cfg.cost;
+      if (s.wood < c.wood || s.stone < c.stone || s.clay < (c.clay ?? 0) || s.bswx < (c.bswx ?? 0)) {
+        get().addToast('Not enough resources for that.', 'warn', '!');
+        audio.sfx('error');
+        return;
+      }
+      const plot: Plot = {
+        id: `b${plotSeq++}_${pl.x}_${pl.z}`,
+        x: pl.x,
+        z: pl.z,
+        building: pl.buildingId,
+        level: 1,
+        construction: 6,
+        rot: pl.rot,
+      };
       set({
-        plots,
-        wood: state.wood - c.wood,
-        stone: state.stone - c.stone,
-        clay: state.clay - (c.clay ?? 0),
-        bswx: state.bswx - (c.bswx ?? 0),
+        plots: [...s.plots, plot],
+        wood: s.wood - c.wood,
+        stone: s.stone - c.stone,
+        clay: s.clay - (c.clay ?? 0),
+        bswx: s.bswx - (c.bswx ?? 0),
+        placing: null,
+      });
+      audio.sfx('build');
+      get().addToast(`Construction started: ${cfg.name}`, 'info', '⚒');
+    },
+
+    demolishPlot: (plotId) => {
+      const s = get();
+      const plot = s.plots.find((p) => p.id === plotId);
+      if (!plot?.building) return;
+      const cfg = BUILDINGS[plot.building];
+      const refundWood = Math.round(cfg.cost.wood * 0.4 * plot.level);
+      const refundStone = Math.round(cfg.cost.stone * 0.4 * plot.level);
+      const refundClay = Math.round((cfg.cost.clay ?? 0) * 0.4 * plot.level);
+      set({
+        plots: s.plots.filter((p) => p.id !== plotId),
+        wood: s.wood + refundWood,
+        stone: s.stone + refundStone,
+        clay: s.clay + refundClay,
         panel: null,
         selectedPlot: null,
       });
       audio.sfx('build');
-      get().addToast(`Construction started: ${cfg.name}`, 'info', '⚒');
+      get().addToast(`Demolished ${cfg.name} — salvaged some materials.`, 'info', '⚒');
     },
 
     upgradePlot: (plotId) => {
@@ -1289,6 +1384,7 @@ export const useGame = create<GameState>((set, get) => {
           timeOfDay: s.timeOfDay, day: s.day,
           quests: s.quests, trackedQuest: s.trackedQuest,
           plots: s.plots,
+          goalIndex: s.goalIndex,
           nodes: s.nodes.map((n) => ({ id: n.id, hp: n.hp, regrow: Math.round(n.regrow) })),
           loan: s.loan,
           lastSeen: Date.now(),
@@ -1499,6 +1595,44 @@ export const useGame = create<GameState>((set, get) => {
     audio.sfx(tmpl.good ? 'complete' : 'error');
   }
 
+  function goalValue(s: GameState, kind: TownGoal['kind']): number {
+    switch (kind) {
+      case 'buildings':
+        return s.plots.filter((p) => p.building && p.construction === 0).length;
+      case 'population':
+        return deriveResidents(s.plots).length;
+      case 'reputation':
+        return s.reputation;
+      case 'earned':
+        return s.totalEarned;
+      case 'level':
+        return s.level;
+      default:
+        return 0;
+    }
+  }
+
+  /** Advance the endless goal ladder, awarding any goals now satisfied. */
+  function checkGoals() {
+    let advanced = false;
+    for (let guard = 0; guard < 20; guard++) {
+      const s = get();
+      const goal = goalAt(s.goalIndex);
+      if (goalValue(s, goal.kind) < goal.target) break;
+      set({ goalIndex: s.goalIndex + 1 });
+      const r = goal.reward;
+      if (r.rep) set({ reputation: get().reputation + r.rep });
+      if (r.bswx) earn(r.bswx);
+      if (r.xp) grantXp(r.xp);
+      get().addToast(`Town goal reached: ${goal.label}!`, 'quest', '🎯');
+      advanced = true;
+    }
+    if (advanced) {
+      audio.playLevelUp();
+      checkReputationObjectives();
+    }
+  }
+
   /** Grow an overdue loan and ding reputation at each day rollover. */
   function processLoanDay(newDay: number) {
     const s = get();
@@ -1547,7 +1681,11 @@ function loadSave(): Partial<GameState> | null {
     // merge saved quests with definitions (handles new quests added later)
     const quests = initialQuestsMerge(data.quests ?? {});
 
-    const plots = (data.plots ?? generatePlots()) as Plot[];
+    // keep only built plots (drops legacy pre-generated empty squares) and
+    // default rotation for saves from before free placement existed
+    const plots = ((data.plots ?? []) as Plot[])
+      .filter((p) => p.building)
+      .map((p) => ({ ...p, rot: p.rot ?? 0 }));
     const circulation = data.circulation ?? 1;
 
     // offline earnings — accrue passive income for time spent away (capped)
@@ -1587,6 +1725,7 @@ function loadSave(): Partial<GameState> | null {
       quests,
       trackedQuest: data.trackedQuest ?? null,
       plots,
+      goalIndex: data.goalIndex ?? 0,
       nodes,
       nodesVersion: 1,
       welcomeBack,
