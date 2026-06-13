@@ -41,6 +41,7 @@ export default function Panels() {
       {panel === 'board' && <Modal title="Community Board"><BoardPanel /></Modal>}
       {panel === 'charter' && <Modal title="Charter a New District"><CharterPanel /></Modal>}
       {panel === 'civic' && <Modal title="Town Improvements"><CivicPanel /></Modal>}
+      {panel === 'labor' && <Modal title="Labor Office"><LaborPanel /></Modal>}
       {panel === 'help' && <Modal title="How to Play"><HelpPanel /></Modal>}
     </>
   );
@@ -214,6 +215,15 @@ function Inventory() {
           className="w-full rounded-xl border border-sky-400/40 bg-sky-500/10 py-2.5 text-xs font-bold text-sky-100 transition hover:bg-sky-500/20"
         >
           🏛️ Town Improvements
+        </button>
+      )}
+
+      {deriveResidents(s.plots).length > 0 && (
+        <button
+          onClick={() => s.setPanel('labor')}
+          className="w-full rounded-xl border border-amber-400/40 bg-amber-400/10 py-2.5 text-xs font-bold text-amber-100 transition hover:bg-amber-400/20"
+        >
+          👷 Labor Office
         </button>
       )}
 
@@ -823,6 +833,74 @@ function BoardPanel() {
   );
 }
 
+function LaborPanel() {
+  const s = useGame();
+  const population = deriveResidents(s.plots).length;
+  const rows = [
+    { res: 'wood', icon: '🪵', name: 'Lumber' },
+    { res: 'stone', icon: '🪨', name: 'Stone' },
+    { res: 'clay', icon: '🧱', name: 'Clay' },
+  ] as const;
+  if (population === 0) {
+    return (
+      <div className="text-xs leading-relaxed text-white/60">
+        Build <span className="font-semibold text-amber-300">cottages</span> to bring residents you can hire as
+        laborers.
+      </div>
+    );
+  }
+  const assigned = s.labor.wood + s.labor.stone + s.labor.clay;
+  const free = population - assigned;
+  const wage = Math.ceil(rows.reduce((sum, r) => sum + s.labor[r.res] * s.marketPrices[r.res], 0));
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] leading-relaxed text-white/55">
+        Put your neighbors to work gathering materials every tick. They&apos;re paid the <b>market rate</b> (no markup) —
+        cheaper than buying, and it spares you the trip out to harvest.
+      </p>
+      <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px]">
+        <span className="text-white/70">
+          Available: <b className="text-amber-200">{free}</b> / {population} residents
+        </span>
+        <span className="text-white/70">
+          Wage: <b className="text-amber-300">◆{wage}</b>/tick
+        </span>
+      </div>
+      <div className="space-y-2">
+        {rows.map((r) => {
+          const n = s.labor[r.res];
+          return (
+            <div key={r.res} className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-white">
+                  {r.icon} {r.name} <span className="text-[11px] font-normal text-white/45">— {n} on the job</span>
+                </span>
+                <span className="text-[10px] text-amber-200/80">+{n}/tick · ◆{Math.ceil(s.marketPrices[r.res])}/ea</span>
+              </div>
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={() => s.assignLabor(r.res, -1)}
+                  disabled={n <= 0}
+                  className="rounded-lg border border-white/15 bg-white/5 px-3 py-1 text-[12px] font-bold text-white/80 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  − Pull
+                </button>
+                <button
+                  onClick={() => s.assignLabor(r.res, 1)}
+                  disabled={free <= 0}
+                  className="rounded-lg border border-amber-400/50 bg-amber-400/15 px-3 py-1 text-[12px] font-bold text-amber-200 transition hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:opacity-30"
+                >
+                  + Assign
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function CivicPanel() {
   const s = useGame();
   return (
@@ -1021,6 +1099,12 @@ function HelpPanel() {
         Pool BSWX into civic upgrades from your <Kbd>I</Kbd> Inventory (<b>🏛️ Town Improvements</b>): <b>paved roads</b>{' '}
         (move faster), <b>street lamps</b> (more night income), a <b>school</b> (more XP), <b>waterworks</b> (more food),
         and a <b>chamber of commerce</b> (more income). They&apos;re permanent and a great place to spend a fat treasury.
+      </Section>
+      <Section h="Hired Laborers">
+        Once cottages bring residents, open the <b>👷 Labor Office</b> from your <Kbd>I</Kbd> Inventory and assign them
+        to gather lumber, stone, or clay each tick. They&apos;re paid the market rate (cheaper than buying, no trip
+        required), so as your town grows you can trade BSWX for a steady flow of materials instead of harvesting every
+        load by hand.
       </Section>
       <Section h="Town Goals">
         Beyond the story, there&apos;s always a <b>🎯 Town Goal</b> on screen — grow your population, reputation, and

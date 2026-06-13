@@ -148,6 +148,9 @@ export type Skills = Record<SkillId, number>;
 export type CivicId = 'roads' | 'lamps' | 'school' | 'waterworks' | 'commerce';
 export type Civics = Record<CivicId, number>;
 
+// Hired laborers — residents assigned to gather a resource for a market wage.
+export type LaborAssignment = { wood: number; stone: number; clay: number };
+
 export type HairStyle = 'classic' | 'fade' | 'afro' | 'locs' | 'braids' | 'puffs' | 'waves' | 'bald';
 export type HatStyle = 'none' | 'cap' | 'bowler' | 'tophat' | 'headwrap';
 export type AccessoryStyle = 'none' | 'glasses' | 'earrings' | 'bowtie';
@@ -193,6 +196,7 @@ export type PanelId =
   | 'board'
   | 'charter'
   | 'civic'
+  | 'labor'
   | 'help'
   | 'settings';
 

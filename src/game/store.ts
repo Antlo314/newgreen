@@ -57,6 +57,7 @@ import type {
   PlacingState,
   CivicId,
   Civics,
+  LaborAssignment,
   PlayerAppearance,
   Plot,
   QuestProgress,
@@ -169,6 +170,10 @@ const LOAN_OVERDUE_GROWTH = 1.12; // debt grows this much each overdue day
 // prestige
 const LEGACY_PER_TOKEN = 0.08; // +8% to all income per legacy token
 
+// hired laborers — each gathers this many units per economy tick, for a wage
+// equal to the resource's market price (no spread; cheaper than buying).
+const LABOR_YIELD = 1;
+
 // resident requests (community board)
 const REQUEST_FIRST_GAP = 70;
 const REQUEST_MIN_GAP = 110;
@@ -228,6 +233,9 @@ interface GameState {
 
   // civic improvements (town-wide BSWX-bought upgrades)
   civics: Civics;
+
+  // hired laborers gathering each resource (paid a market wage per tick)
+  labor: LaborAssignment;
 
   // world
   nodes: ResourceNode[];
@@ -294,6 +302,7 @@ interface GameState {
   setPlayerPos: (x: number, z: number, facing: number, moving: boolean, sprinting?: boolean) => void;
   spendSkill: (id: SkillId) => void;
   buyCivic: (id: CivicId) => void;
+  assignLabor: (res: 'wood' | 'stone' | 'clay', delta: number) => void;
   setMoveTarget: (t: { x: number; z: number } | null) => void;
   setInteractTarget: (t: InteractTarget | null) => void;
   setPanel: (p: PanelId) => void;
@@ -369,6 +378,7 @@ function freshPlayerState() {
     skillPoints: 0,
     skills: emptySkills(),
     civics: emptyCivics(),
+    labor: { wood: 0, stone: 0, clay: 0 } as LaborAssignment,
     nodes: generateResourceNodes(),
     nodesVersion: 0,
     plots: [] as Plot[],
@@ -398,6 +408,7 @@ export const useGame = create<GameState>((set, get) => {
   let windedWarned = false;
   let nightExplained = false;
   let hungerWarned = false;
+  let laborWarned = false;
   let comboTimer = 0;
   let eventId = 1;
   let popId = 1;
@@ -679,6 +690,18 @@ export const useGame = create<GameState>((set, get) => {
       get().addToast(`${def.name} improved to level ${lvl + 1}!`, 'reward', def.icon);
       get().save();
     },
+
+    assignLabor: (res, delta) => {
+      const s = get();
+      const labor = { ...s.labor };
+      const population = deriveResidents(s.plots).length;
+      const others = labor.wood + labor.stone + labor.clay - labor[res];
+      const next = Math.max(0, Math.min(labor[res] + delta, population - others));
+      if (next === labor[res]) return;
+      labor[res] = next;
+      set({ labor });
+      audio.sfx('ui');
+    },
     setInteractTarget: (interactTarget) => {
       const cur = get().interactTarget;
       if (cur?.id === interactTarget?.id && cur?.kind === interactTarget?.kind) return;
@@ -936,6 +959,40 @@ export const useGame = create<GameState>((set, get) => {
           earn(income);
           audio.sfx('coin');
         }
+
+        // hired laborers gather materials for a market-rate wage (capped by
+        // population; cheaper than buying, and it saves the manual harvest run)
+        {
+          let budget = population;
+          const gain = { wood: 0, stone: 0, clay: 0 };
+          let wage = 0;
+          (['wood', 'stone', 'clay'] as const).forEach((r) => {
+            const n = Math.min(s.labor[r] ?? 0, Math.max(0, budget));
+            budget -= n;
+            gain[r] = n * LABOR_YIELD;
+            wage += n * LABOR_YIELD * s.marketPrices[r];
+          });
+          wage = Math.ceil(wage);
+          if (gain.wood + gain.stone + gain.clay > 0) {
+            if (get().bswx >= wage) {
+              const st = get();
+              set({
+                bswx: st.bswx - wage,
+                wood: st.wood + gain.wood,
+                stone: st.stone + gain.stone,
+                clay: st.clay + gain.clay,
+              });
+              laborWarned = false;
+              (['wood', 'stone', 'clay'] as const).forEach((r) => {
+                if (gain[r]) applyQuestEvent('gather', r, gain[r]);
+              });
+            } else if (!laborWarned) {
+              laborWarned = true;
+              get().addToast('Your laborers went unpaid — assign fewer or build up more BSWX.', 'warn', '👷');
+            }
+          }
+        }
+
         if (fortune?.repPerTick) {
           set({ reputation: get().reputation + fortune.repPerTick });
           checkReputationObjectives();
@@ -1677,7 +1734,7 @@ export const useGame = create<GameState>((set, get) => {
           food: s.food, goods: s.goods, marketPrices: s.marketPrices, circulation: s.circulation,
           stamina: s.stamina, staminaMax: s.staminaMax,
           reputation: s.reputation, level: s.level, xp: s.xp, totalEarned: s.totalEarned,
-          skillPoints: s.skillPoints, skills: s.skills, civics: s.civics,
+          skillPoints: s.skillPoints, skills: s.skills, civics: s.civics, labor: s.labor,
           timeOfDay: s.timeOfDay, day: s.day,
           quests: s.quests, trackedQuest: s.trackedQuest,
           plots: s.plots,
@@ -2088,6 +2145,7 @@ function loadSave(): Partial<GameState> | null {
       skillPoints: data.skillPoints ?? Math.max(0, (data.level ?? 1) - 1),
       skills: { ...emptySkills(), ...(data.skills ?? {}) },
       civics,
+      labor: { wood: 0, stone: 0, clay: 0, ...(data.labor ?? {}) },
       sprinting: false,
       timeOfDay: data.timeOfDay ?? 0.32,
       day: data.day ?? 1,
