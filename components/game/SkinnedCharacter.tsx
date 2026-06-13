@@ -164,6 +164,7 @@ function BoneGear({
           hair={appearance.hair === 'classic' ? 'bald' : appearance.hair}
           hairColor={appearance.hairColor}
           accessory={appearance.accessory}
+          facialHair={appearance.facialHair}
         />
       </group>
     </group>,

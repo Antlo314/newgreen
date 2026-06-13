@@ -151,9 +151,31 @@ export type Civics = Record<CivicId, number>;
 // Hired laborers — residents assigned to gather a resource for a market wage.
 export type LaborAssignment = { wood: number; stone: number; clay: number };
 
-export type HairStyle = 'classic' | 'fade' | 'afro' | 'locs' | 'braids' | 'puffs' | 'waves' | 'bald';
-export type HatStyle = 'none' | 'cap' | 'bowler' | 'tophat' | 'headwrap';
-export type AccessoryStyle = 'none' | 'glasses' | 'earrings' | 'bowtie';
+export type HairStyle =
+  | 'classic'
+  | 'fade'
+  | 'afro'
+  | 'locs'
+  | 'braids'
+  | 'puffs'
+  | 'waves'
+  | 'hightop'
+  | 'cornrows'
+  | 'twists'
+  | 'bantu'
+  | 'bald';
+export type HatStyle =
+  | 'none'
+  | 'cap'
+  | 'bowler'
+  | 'tophat'
+  | 'headwrap'
+  | 'fedora'
+  | 'beret'
+  | 'cloche'
+  | 'durag';
+export type AccessoryStyle = 'none' | 'glasses' | 'earrings' | 'bowtie' | 'necklace' | 'scarf' | 'monocle';
+export type FacialHair = 'none' | 'mustache' | 'goatee' | 'fullbeard' | 'sideburns';
 export type BodyBuild = 'broad' | 'slender';
 
 export interface PlayerAppearance {
@@ -171,6 +193,7 @@ export interface PlayerAppearance {
   shirt: string;
   pants: string;
   accessory: AccessoryStyle;
+  facialHair: FacialHair;
 }
 
 export interface CallingDef {

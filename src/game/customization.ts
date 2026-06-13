@@ -2,7 +2,7 @@
 // Palettes, hairstyles, callings, and era-appropriate name pools celebrating
 // the Black community of 1920s Greenwood.
 
-import type { CallingDef, HairStyle, HatStyle, AccessoryStyle, BodyBuild, PlayerAppearance } from './types';
+import type { CallingDef, HairStyle, HatStyle, AccessoryStyle, FacialHair, BodyBuild, PlayerAppearance } from './types';
 
 export const SKIN_TONES: { name: string; color: string }[] = [
   { name: 'Deep Ebony', color: '#3a241b' },
@@ -13,6 +13,8 @@ export const SKIN_TONES: { name: string; color: string }[] = [
   { name: 'Sienna', color: '#8a5736' },
   { name: 'Caramel', color: '#9c6b3f' },
   { name: 'Honey Bronze', color: '#ab7c4c' },
+  { name: 'Golden Sand', color: '#b98a5a' },
+  { name: 'Almond', color: '#c79a6b' },
 ];
 
 export interface CharacterModelDef {
@@ -76,8 +78,12 @@ export const HAIR_STYLES: { id: HairStyle; name: string; icon: string }[] = [
   { id: 'classic', name: 'Classic', icon: '◆' },
   { id: 'fade', name: 'Low Fade', icon: '▬' },
   { id: 'afro', name: 'Afro', icon: '●' },
+  { id: 'hightop', name: 'High-Top Fade', icon: '⬒' },
   { id: 'locs', name: 'Locs', icon: '☰' },
   { id: 'braids', name: 'Braids', icon: '≋' },
+  { id: 'cornrows', name: 'Cornrows', icon: '⦀' },
+  { id: 'twists', name: 'Twists', icon: '❉' },
+  { id: 'bantu', name: 'Bantu Knots', icon: '⁙' },
   { id: 'puffs', name: 'Afro Puffs', icon: '••' },
   { id: 'waves', name: 'Waves', icon: '〰' },
   { id: 'bald', name: 'Clean Shave', icon: '○' },
@@ -89,15 +95,22 @@ export const HAIR_COLORS: { name: string; color: string }[] = [
   { name: 'Dark Brown', color: '#3a2417' },
   { name: 'Auburn', color: '#5a2e1a' },
   { name: 'Henna', color: '#7a3b22' },
+  { name: 'Sandy Blond', color: '#9c7748' },
+  { name: 'Cool Gray', color: '#8a8780' },
   { name: 'Silver Crown', color: '#b8b2a8' },
+  { name: 'Burgundy Dye', color: '#5e1f2e' },
 ];
 
 export const HAT_STYLES: { id: HatStyle; name: string; icon: string }[] = [
   { id: 'none', name: 'No Hat', icon: '—' },
   { id: 'cap', name: 'Newsboy Cap', icon: '◗' },
+  { id: 'fedora', name: 'Fedora', icon: '⌒' },
   { id: 'bowler', name: 'Bowler', icon: '◓' },
   { id: 'tophat', name: 'Top Hat', icon: '⬓' },
+  { id: 'beret', name: 'Beret', icon: '◔' },
+  { id: 'cloche', name: 'Cloche', icon: '◖' },
   { id: 'headwrap', name: 'Headwrap', icon: '◠' },
+  { id: 'durag', name: 'Durag', icon: '◞' },
 ];
 
 export const HAT_COLORS: { name: string; color: string }[] = [
@@ -107,6 +120,8 @@ export const HAT_COLORS: { name: string; color: string }[] = [
   { name: 'Forest', color: '#2d5a3d' },
   { name: 'Oxblood', color: '#6e2b2b' },
   { name: 'Royal Plum', color: '#4a2d6e' },
+  { name: 'Cream Felt', color: '#d8cba8' },
+  { name: 'Teal', color: '#1f6f6b' },
 ];
 
 export const SHIRT_COLORS: { name: string; color: string }[] = [
@@ -118,6 +133,10 @@ export const SHIRT_COLORS: { name: string; color: string }[] = [
   { name: 'Mustard Vest', color: '#b8862b' },
   { name: 'Dusty Rose', color: '#b06a72' },
   { name: 'Slate Gray', color: '#5a6068' },
+  { name: 'Burnt Sienna', color: '#a85a32' },
+  { name: 'Teal Stripe', color: '#1f7a72' },
+  { name: 'Cocoa Brown', color: '#5a3c28' },
+  { name: 'Soft Lilac', color: '#9a7fb0' },
 ];
 
 export const PANTS_COLORS: { name: string; color: string }[] = [
@@ -127,13 +146,27 @@ export const PANTS_COLORS: { name: string; color: string }[] = [
   { name: 'Faded Denim', color: '#3d4d63' },
   { name: 'Olive Drab', color: '#4a4d32' },
   { name: 'Cream Linen', color: '#cdc2a5' },
+  { name: 'Burgundy', color: '#5a2733' },
+  { name: 'Pinstripe Navy', color: '#2a3550' },
+  { name: 'Tan Twill', color: '#9a7a4f' },
 ];
 
 export const ACCESSORIES: { id: AccessoryStyle; name: string; icon: string }[] = [
   { id: 'none', name: 'None', icon: '—' },
   { id: 'glasses', name: 'Spectacles', icon: 'oo' },
+  { id: 'monocle', name: 'Monocle', icon: 'o' },
   { id: 'earrings', name: 'Gold Earrings', icon: '◦◦' },
+  { id: 'necklace', name: 'Gold Chain', icon: '⌒' },
   { id: 'bowtie', name: 'Bowtie', icon: '⋈' },
+  { id: 'scarf', name: 'Neck Scarf', icon: '∿' },
+];
+
+export const FACIAL_HAIR: { id: FacialHair; name: string; icon: string }[] = [
+  { id: 'none', name: 'Clean', icon: '—' },
+  { id: 'mustache', name: 'Mustache', icon: '⌐' },
+  { id: 'goatee', name: 'Goatee', icon: '∇' },
+  { id: 'sideburns', name: 'Sideburns', icon: 'Ⅱ' },
+  { id: 'fullbeard', name: 'Full Beard', icon: '▼' },
 ];
 
 export const BUILDS: { id: BodyBuild; name: string; desc: string }[] = [
@@ -232,6 +265,7 @@ export function randomAppearance(rng: () => number = Math.random): PlayerAppeara
     shirt: pick(SHIRT_COLORS, rng).color,
     pants: pick(PANTS_COLORS, rng).color,
     accessory: pick(ACCESSORIES, rng).id,
+    facialHair: pick(FACIAL_HAIR, rng).id,
   };
 }
 
@@ -248,4 +282,5 @@ export const DEFAULT_APPEARANCE: PlayerAppearance = {
   shirt: '#1f6f50',
   pants: '#33302c',
   accessory: 'none',
+  facialHair: 'none',
 };

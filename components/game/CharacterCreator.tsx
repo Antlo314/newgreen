@@ -12,6 +12,7 @@ import {
   CALLINGS,
   CALLING_BY_ID,
   CHARACTER_MODELS,
+  FACIAL_HAIR,
   HAIR_COLORS,
   HAIR_STYLES,
   HAT_COLORS,
@@ -150,13 +151,23 @@ export default function CharacterCreator() {
                   </Chip>
                 ))}
               </div>
-              {ap.hair !== 'bald' && (
+              {(ap.hair !== 'bald' || ap.facialHair !== 'none') && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {HAIR_COLORS.map((c) => (
                     <Swatch key={c.color} color={c.color} name={c.name} active={ap.hairColor === c.color} onClick={() => patch({ hairColor: c.color })} />
                   ))}
                 </div>
               )}
+            </Section>
+
+            <Section title="Facial Hair" hint="Tinted with your hair color">
+              <div className="flex flex-wrap gap-2">
+                {FACIAL_HAIR.map((f) => (
+                  <Chip key={f.id} active={ap.facialHair === f.id} onClick={() => patch({ facialHair: f.id })}>
+                    {f.name}
+                  </Chip>
+                ))}
+              </div>
             </Section>
 
             <Section title="Hat">

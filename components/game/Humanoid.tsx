@@ -3,7 +3,7 @@
 import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { AccessoryStyle, BodyBuild, HairStyle } from '../../src/game/types';
+import type { AccessoryStyle, BodyBuild, FacialHair, HairStyle } from '../../src/game/types';
 
 export interface WalkRef {
   /** current movement speed in m/s — drives limb swing */
@@ -14,11 +14,12 @@ interface HumanoidProps {
   skin: string;
   shirt: string;
   pants: string;
-  hat?: 'tophat' | 'bowler' | 'headwrap' | 'crown' | 'cap' | 'none';
+  hat?: 'tophat' | 'bowler' | 'headwrap' | 'crown' | 'cap' | 'fedora' | 'beret' | 'cloche' | 'durag' | 'none';
   hatColor?: string;
   hair?: HairStyle;
   hairColor?: string;
   accessory?: AccessoryStyle;
+  facialHair?: FacialHair;
   build?: BodyBuild;
   walkRef?: React.MutableRefObject<WalkRef>;
   scale?: number;
@@ -34,6 +35,7 @@ export default function Humanoid({
   hair = 'fade',
   hairColor = '#15100c',
   accessory = 'none',
+  facialHair = 'none',
   build = 'broad',
   walkRef,
   scale = 1,
@@ -83,7 +85,7 @@ export default function Humanoid({
           <boxGeometry args={[0.34, 0.34, 0.32]} />
           <meshStandardMaterial color={skin} roughness={0.7} />
         </mesh>
-        <HeadGear hat={hat} hatColor={hatColor} hair={hair} hairColor={hairColor} accessory={accessory} />
+        <HeadGear hat={hat} hatColor={hatColor} hair={hair} hairColor={hairColor} accessory={accessory} facialHair={facialHair} />
         {/* arms (pivot at shoulder) */}
         <mesh ref={lArm} position={[-armX, 1.18, 0]} castShadow>
           <boxGeometry args={[armW, 0.5, 0.14]} />
@@ -118,17 +120,20 @@ export function HeadGear({
   hair,
   hairColor,
   accessory,
+  facialHair = 'none',
 }: {
   hat: string;
   hatColor: string;
   hair: HairStyle;
   hairColor: string;
   accessory: AccessoryStyle;
+  facialHair?: FacialHair;
 }) {
   return (
     <group>
       <Hair style={hair} color={hairColor} hat={hat} />
       <Accessory style={accessory} />
+      <FacialHairMesh style={facialHair} color={hairColor} />
       {hat === 'tophat' && (
         <group position={[0, 1.68, 0]}>
           <mesh castShadow>
@@ -174,6 +179,64 @@ export function HeadGear({
           <mesh position={[0, 0, 0.17]} castShadow>
             <boxGeometry args={[0.22, 0.03, 0.14]} />
             <meshStandardMaterial color={hatColor} roughness={0.7} />
+          </mesh>
+        </group>
+      )}
+      {hat === 'fedora' && (
+        <group position={[0, 1.63, 0]}>
+          {/* wide brim */}
+          <mesh castShadow>
+            <cylinderGeometry args={[0.28, 0.28, 0.025, 18]} />
+            <meshStandardMaterial color={hatColor} roughness={0.6} />
+          </mesh>
+          {/* creased crown */}
+          <mesh position={[0, 0.12, 0]} castShadow>
+            <cylinderGeometry args={[0.17, 0.18, 0.22, 14]} />
+            <meshStandardMaterial color={hatColor} roughness={0.6} />
+          </mesh>
+          {/* darker band */}
+          <mesh position={[0, 0.04, 0]} castShadow>
+            <cylinderGeometry args={[0.185, 0.185, 0.05, 14]} />
+            <meshStandardMaterial color="#1c1a18" roughness={0.7} />
+          </mesh>
+        </group>
+      )}
+      {hat === 'beret' && (
+        <group position={[0, 1.66, 0]} rotation={[0.16, 0, 0.14]}>
+          <mesh castShadow>
+            <cylinderGeometry args={[0.21, 0.21, 0.06, 16]} />
+            <meshStandardMaterial color={hatColor} roughness={0.8} />
+          </mesh>
+          <mesh position={[0, 0.05, 0]} castShadow>
+            <sphereGeometry args={[0.035, 8, 6]} />
+            <meshStandardMaterial color={hatColor} roughness={0.8} />
+          </mesh>
+        </group>
+      )}
+      {hat === 'cloche' && (
+        <group position={[0, 1.5, 0]}>
+          {/* deep bell-shaped dome hugging the head (1920s) */}
+          <mesh position={[0, 0.14, 0]} castShadow>
+            <sphereGeometry args={[0.215, 14, 10, 0, Math.PI * 2, 0, Math.PI / 1.7]} />
+            <meshStandardMaterial color={hatColor} roughness={0.7} />
+          </mesh>
+          {/* short downturned brim */}
+          <mesh position={[0, 0.05, 0.02]} rotation={[0.12, 0, 0]} castShadow>
+            <cylinderGeometry args={[0.235, 0.235, 0.03, 18]} />
+            <meshStandardMaterial color={hatColor} roughness={0.7} />
+          </mesh>
+        </group>
+      )}
+      {hat === 'durag' && (
+        <group>
+          <mesh position={[0, 1.62, -0.01]} castShadow>
+            <sphereGeometry args={[0.195, 14, 9, 0, Math.PI * 2, 0, Math.PI / 2]} />
+            <meshStandardMaterial color={hatColor} roughness={0.55} metalness={0.05} />
+          </mesh>
+          {/* tail hanging down the back */}
+          <mesh position={[0, 1.42, -0.18]} rotation={[0.3, 0, 0]} castShadow>
+            <boxGeometry args={[0.16, 0.26, 0.025]} />
+            <meshStandardMaterial color={hatColor} roughness={0.55} />
           </mesh>
         </group>
       )}
@@ -249,6 +312,58 @@ function Hair({ style, color, hat }: { style: HairStyle; color: string; hat: str
               ))}
             </group>
           )}
+          {!covered && style === 'hightop' && (
+            <>
+              <mesh position={[0, 1.6, -0.005]} castShadow>
+                <boxGeometry args={[0.34, 0.06, 0.31]} />
+                <meshStandardMaterial color={color} roughness={1} />
+              </mesh>
+              <mesh position={[0, 1.8, 0]} castShadow>
+                <boxGeometry args={[0.3, 0.32, 0.28]} />
+                <meshStandardMaterial color={color} roughness={1} />
+              </mesh>
+            </>
+          )}
+          {!covered && style === 'cornrows' && (
+            <group position={[0, 1.62, -0.01]}>
+              {[-0.13, -0.065, 0, 0.065, 0.13].map((x) => (
+                <mesh key={x} position={[x, 0.02, 0]} castShadow>
+                  <boxGeometry args={[0.035, 0.06, 0.34]} />
+                  <meshStandardMaterial color={color} roughness={1} />
+                </mesh>
+              ))}
+            </group>
+          )}
+          {!covered && style === 'twists' && (
+            <>
+              <mesh position={[0, 1.61, -0.005]} castShadow>
+                <boxGeometry args={[0.35, 0.07, 0.32]} />
+                <meshStandardMaterial color={color} roughness={1} />
+              </mesh>
+              {([[-0.12, -0.06], [0.12, -0.06], [0, -0.1], [-0.13, 0.06], [0.13, 0.06], [0, 0.12], [0, 0]] as const).map(
+                ([x, z], i) => (
+                  <mesh key={i} position={[x, 1.7, z]} castShadow>
+                    <sphereGeometry args={[0.055, 8, 6]} />
+                    <meshStandardMaterial color={color} roughness={1} />
+                  </mesh>
+                )
+              )}
+            </>
+          )}
+          {!covered && style === 'bantu' && (
+            <>
+              <mesh position={[0, 1.61, -0.005]} castShadow>
+                <boxGeometry args={[0.35, 0.07, 0.32]} />
+                <meshStandardMaterial color={color} roughness={1} />
+              </mesh>
+              {([[-0.1, -0.05], [0.1, -0.05], [-0.1, 0.08], [0.1, 0.08], [0, 0.02]] as const).map(([x, z], i) => (
+                <mesh key={i} position={[x, 1.72, z]} castShadow>
+                  <coneGeometry args={[0.06, 0.1, 8]} />
+                  <meshStandardMaterial color={color} roughness={1} />
+                </mesh>
+              ))}
+            </>
+          )}
         </>
       )}
       {/* hanging strands frame the face even under hats and wraps */}
@@ -301,6 +416,48 @@ function Accessory({ style }: { style: AccessoryStyle }) {
       </group>
     );
   }
+  if (style === 'monocle') {
+    return (
+      <group position={[0.085, 1.47, 0.17]}>
+        <mesh>
+          <torusGeometry args={[0.055, 0.012, 6, 16]} />
+          <meshStandardMaterial color="#e8c64a" metalness={0.7} roughness={0.3} />
+        </mesh>
+        <mesh position={[0.015, -0.09, 0]} rotation={[0, 0, 0.5]}>
+          <boxGeometry args={[0.009, 0.14, 0.009]} />
+          <meshStandardMaterial color="#e8c64a" metalness={0.6} roughness={0.35} />
+        </mesh>
+      </group>
+    );
+  }
+  if (style === 'necklace') {
+    return (
+      <group position={[0, 1.16, 0]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.15, 0.014, 8, 22]} />
+          <meshStandardMaterial color="#e8c64a" metalness={0.75} roughness={0.25} />
+        </mesh>
+        <mesh position={[0, -0.05, 0.15]}>
+          <sphereGeometry args={[0.03, 8, 6]} />
+          <meshStandardMaterial color="#e8c64a" metalness={0.8} roughness={0.2} />
+        </mesh>
+      </group>
+    );
+  }
+  if (style === 'scarf') {
+    return (
+      <group position={[0, 1.2, 0]}>
+        <mesh castShadow>
+          <cylinderGeometry args={[0.2, 0.2, 0.12, 14]} />
+          <meshStandardMaterial color="#b5532f" roughness={0.85} />
+        </mesh>
+        <mesh position={[0.07, -0.12, 0.16]} rotation={[0.2, 0, 0.1]} castShadow>
+          <boxGeometry args={[0.08, 0.22, 0.03]} />
+          <meshStandardMaterial color="#b5532f" roughness={0.85} />
+        </mesh>
+      </group>
+    );
+  }
   // bowtie
   return (
     <group position={[0, 1.245, 0.16]}>
@@ -316,6 +473,67 @@ function Accessory({ style }: { style: AccessoryStyle }) {
         <boxGeometry args={[0.08, 0.06, 0.03]} />
         <meshStandardMaterial color="#8a3535" roughness={0.7} />
       </mesh>
+    </group>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Facial hair — beards/mustaches framing the lower face, tinted with hair color.
+// ---------------------------------------------------------------------------
+
+function FacialHairMesh({ style, color }: { style: FacialHair; color: string }) {
+  if (style === 'none') return null;
+  if (style === 'mustache') {
+    return (
+      <mesh position={[0, 1.405, 0.165]} castShadow>
+        <boxGeometry args={[0.15, 0.03, 0.03]} />
+        <meshStandardMaterial color={color} roughness={1} />
+      </mesh>
+    );
+  }
+  if (style === 'sideburns') {
+    return (
+      <group>
+        {[-1, 1].map((s) => (
+          <mesh key={s} position={[s * 0.165, 1.41, 0.04]} castShadow>
+            <boxGeometry args={[0.03, 0.14, 0.16]} />
+            <meshStandardMaterial color={color} roughness={1} />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+  if (style === 'goatee') {
+    return (
+      <group>
+        <mesh position={[0, 1.405, 0.165]} castShadow>
+          <boxGeometry args={[0.14, 0.028, 0.03]} />
+          <meshStandardMaterial color={color} roughness={1} />
+        </mesh>
+        <mesh position={[0, 1.33, 0.15]} castShadow>
+          <boxGeometry args={[0.09, 0.09, 0.06]} />
+          <meshStandardMaterial color={color} roughness={1} />
+        </mesh>
+      </group>
+    );
+  }
+  // fullbeard — frames the whole jaw
+  return (
+    <group>
+      <mesh position={[0, 1.405, 0.165]} castShadow>
+        <boxGeometry args={[0.15, 0.03, 0.03]} />
+        <meshStandardMaterial color={color} roughness={1} />
+      </mesh>
+      <mesh position={[0, 1.34, 0.12]} castShadow>
+        <boxGeometry args={[0.3, 0.16, 0.12]} />
+        <meshStandardMaterial color={color} roughness={1} />
+      </mesh>
+      {[-1, 1].map((s) => (
+        <mesh key={s} position={[s * 0.16, 1.4, 0.05]} castShadow>
+          <boxGeometry args={[0.04, 0.18, 0.18]} />
+          <meshStandardMaterial color={color} roughness={1} />
+        </mesh>
+      ))}
     </group>
   );
 }
