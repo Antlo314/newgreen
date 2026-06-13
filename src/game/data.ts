@@ -1,4 +1,4 @@
-import type { BuildingConfig, BuildingId, NPCDef, QuestDef } from './types';
+import type { BuildingConfig, BuildingId, NPCDef, ProvisionDef, QuestDef } from './types';
 
 // ---------------------------------------------------------------------------
 // BUILDINGS
@@ -328,6 +328,31 @@ export const QUESTS: QuestDef[] = [
 ];
 
 export const QUEST_BY_ID = Object.fromEntries(QUESTS.map((q) => [q.id, q]));
+
+// ---------------------------------------------------------------------------
+// PROVISIONS — buy at the Exchange to instantly restore stamina so the active
+// loop never stalls waiting on a regen bar.
+// ---------------------------------------------------------------------------
+
+export const PROVISIONS: ProvisionDef[] = [
+  {
+    id: 'cornbread',
+    name: 'Skillet Cornbread',
+    icon: '🍞',
+    cost: 6,
+    stamina: 35,
+    desc: 'A warm slice from the grocery. Restores 35 stamina on the spot.',
+  },
+  {
+    id: 'pie',
+    name: 'Sugar Bowl Pie',
+    icon: '🥧',
+    cost: 16,
+    stamina: 9999,
+    desc: "Williams' famous sweet — restores ALL of your stamina.",
+    requires: 'sugarbowl',
+  },
+];
 
 // ---------------------------------------------------------------------------
 // MUSIC

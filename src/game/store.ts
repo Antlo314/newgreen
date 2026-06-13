@@ -5,6 +5,7 @@ import {
   COTTAGE_INCOME_BONUS,
   GARDEN_INCOME_BONUS,
   MAX_BUILDING_LEVEL,
+  PROVISIONS,
   QUESTS,
   QUEST_BY_ID,
   RESOURCE_LABEL,
@@ -17,6 +18,8 @@ import { deriveResidents, employmentStats } from './residents';
 import type {
   BuildingId,
   DialogueState,
+  GameEvent,
+  HarvestPop,
   InteractTarget,
   MarketResource,
   PanelId,
@@ -27,6 +30,7 @@ import type {
   ResourceNode,
   ResourceType,
   Toast,
+  WelcomeBack,
 } from './types';
 import { audio } from './audio';
 
@@ -56,9 +60,48 @@ const FOOD_CAP = 99;
 const GOODS_CAP = 99;
 const MARKET_SPREAD = 1.25; // buy price multiplier over sell price
 
+// offline earnings
+const OFFLINE_CAP = 8 * 3600; // accrue at most 8 hours away
+const OFFLINE_EFFICIENCY = 0.6; // offline earns 60% of the active rate
+const OFFLINE_MIN_SECONDS = 120; // ignore quick tab switches
+
+// live events (Market Rush / Rich Find beacons)
+const EVENT_FIRST_GAP = 55; // first beacon after this many seconds
+const EVENT_MIN_GAP = 70;
+const EVENT_MAX_GAP = 120;
+const EVENT_WINDOW = 30; // seconds to reach & collect a beacon
+const RUSH_TICK_VALUE = 6; // a rush pays roughly this many ticks of income
+const RUSH_MIN = 12; // ...but never less than this
+
+// harvest crits & combo
+const CRIT_BASE = 0.12;
+const CRIT_PER_COMBO = 0.03;
+const CRIT_MAX = 0.5;
+const CRIT_MULT = 2;
+const COMBO_WINDOW = 3; // seconds before an idle combo decays
+const COMBO_MAX = 12;
+
 export type GamePhase = 'menu' | 'create' | 'playing';
 
 let toastId = 1;
+
+const rand = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
+
+/** Passive BSWX produced per economy tick from the current town layout. */
+function passiveIncomePerTick(plots: Plot[], circulation: number): number {
+  let base = 0;
+  let cottages = 0;
+  let gardens = 0;
+  for (const p of plots) {
+    if (!p.building || p.construction > 0) continue;
+    base += BUILDINGS[p.building].income * p.level;
+    if (p.building === 'cottage') cottages++;
+    if (p.building === 'garden') gardens++;
+  }
+  const mult =
+    (1 + cottages * COTTAGE_INCOME_BONUS + gardens * GARDEN_INCOME_BONUS) * (circulation || 1);
+  return base * mult;
+}
 
 interface GameState {
   phase: GamePhase;
@@ -101,6 +144,13 @@ interface GameState {
   quests: Record<string, QuestProgress>;
   trackedQuest: string | null;
 
+  // live events, offline payout & harvest juice
+  activeEvent: GameEvent | null;
+  nextEventIn: number;
+  welcomeBack: WelcomeBack | null;
+  harvestPop: HarvestPop | null;
+  combo: number;
+
   // interaction / ui
   panel: PanelId;
   dialogue: DialogueState | null;
@@ -139,6 +189,9 @@ interface GameState {
   upgradePlot: (plotId: string) => void;
   sellResource: (type: MarketResource, amount: number) => void;
   buyResource: (type: Exclude<MarketResource, 'goods'>, amount: number) => void;
+  buyProvision: (id: string) => void;
+  collectEvent: () => void;
+  collectWelcomeBack: () => void;
   unstuck: () => void;
   completeTeleport: () => void;
   save: () => void;
@@ -194,6 +247,9 @@ export const useGame = create<GameState>((set, get) => {
   let saveTimer = 0;
   let staminaWarned = false;
   let hungerWarned = false;
+  let comboTimer = 0;
+  let eventId = 1;
+  let popId = 1;
 
   // ---- quest helpers (operate on draft-ish copies) ----
 
@@ -308,6 +364,11 @@ export const useGame = create<GameState>((set, get) => {
     phase: 'menu',
     hasSave: false,
     ...freshPlayerState(),
+    activeEvent: null,
+    nextEventIn: EVENT_FIRST_GAP,
+    welcomeBack: null,
+    harvestPop: null,
+    combo: 0,
     panel: null,
     dialogue: null,
     interactTarget: null,
@@ -323,8 +384,21 @@ export const useGame = create<GameState>((set, get) => {
       if (!fresh) {
         const loaded = loadSave();
         if (loaded) {
-          set({ ...loaded, phase: 'playing', panel: null, dialogue: null, harvesting: null, moveTarget: null });
-          get().addToast('Welcome back to New Greenwood.', 'info');
+          set({
+            ...loaded,
+            phase: 'playing',
+            panel: null,
+            dialogue: null,
+            harvesting: null,
+            moveTarget: null,
+            activeEvent: null,
+            nextEventIn: EVENT_FIRST_GAP,
+            harvestPop: null,
+            combo: 0,
+          });
+          economyTimer = 0;
+          comboTimer = 0;
+          if (!loaded.welcomeBack) get().addToast('Welcome back to New Greenwood.', 'info');
           return;
         }
       }
@@ -351,6 +425,11 @@ export const useGame = create<GameState>((set, get) => {
         dialogue: null,
         harvesting: null,
         moveTarget: null,
+        activeEvent: null,
+        nextEventIn: EVENT_FIRST_GAP,
+        welcomeBack: null,
+        harvestPop: null,
+        combo: 0,
         toasts: [],
       });
       const first = appearance.name.split(' ')[0];
@@ -580,6 +659,29 @@ export const useGame = create<GameState>((set, get) => {
         }
       }
 
+      // ------------------------------------------------------------------
+      // live events — short, tappable windfalls that reward being active
+      // ------------------------------------------------------------------
+      if (state.activeEvent) {
+        const timeLeft = state.activeEvent.timeLeft - dt;
+        if (timeLeft <= 0) {
+          set({ activeEvent: null, nextEventIn: rand(EVENT_MIN_GAP, EVENT_MAX_GAP) });
+          get().addToast('The moment passed — keep an eye out for the next one.', 'info', '⌛');
+        } else {
+          set({ activeEvent: { ...state.activeEvent, timeLeft } });
+        }
+      } else {
+        const nextEventIn = state.nextEventIn - dt;
+        if (nextEventIn <= 0) spawnEvent();
+        else set({ nextEventIn });
+      }
+
+      // harvest combo decays when you stop swinging
+      if (comboTimer > 0) {
+        comboTimer -= dt;
+        if (comboTimer <= 0 && get().combo !== 0) set({ combo: 0 });
+      }
+
       // autosave
       saveTimer += dt;
       if (saveTimer >= 12) {
@@ -591,7 +693,14 @@ export const useGame = create<GameState>((set, get) => {
         const s = get();
         const [lo, hi] = HARVEST_YIELD[node.type];
         const bonus = Math.floor((s.level - 1) / 2); // +1 yield every 2 levels
-        const amount = lo + Math.floor(Math.random() * (hi - lo + 1)) + bonus;
+
+        // sustained harvesting builds a combo, raising the chance of a crit
+        const combo = Math.min(COMBO_MAX, s.combo + 1);
+        const critChance = Math.min(CRIT_MAX, CRIT_BASE + combo * CRIT_PER_COMBO);
+        const crit = Math.random() < critChance;
+        let amount = lo + Math.floor(Math.random() * (hi - lo + 1)) + bonus;
+        if (crit) amount = Math.round(amount * CRIT_MULT);
+
         const hp = node.hp - 1;
         const nodes = s.nodes.map((n) =>
           n.id === node.id ? { ...n, hp, regrow: hp <= 0 ? NODE_REGROW : 0 } : n
@@ -599,14 +708,22 @@ export const useGame = create<GameState>((set, get) => {
         const patch: Partial<GameState> = {
           nodes,
           nodesVersion: s.nodesVersion + 1,
+          combo,
+          harvestPop: { id: popId++, amount, type: node.type, crit, combo },
           harvesting: hp > 0 && s.stamina >= HARVEST_STAMINA ? { nodeId: node.id, progress: 0 } : null,
         };
         patch[node.type] = (s[node.type] as number) + amount;
         set(patch as never);
+        comboTimer = COMBO_WINDOW;
         audio.sfx(node.type === 'wood' ? 'chop' : node.type === 'stone' ? 'mine' : 'dig');
-        grantXp(4);
+        if (crit) audio.sfx('crit');
+        grantXp(crit ? 8 : 4);
         applyQuestEvent('gather', node.type, amount);
-        get().addToast(`+${amount} ${RESOURCE_LABEL[node.type]}`, 'reward', '+');
+        get().addToast(
+          crit ? `RICH VEIN! +${amount} ${RESOURCE_LABEL[node.type]}` : `+${amount} ${RESOURCE_LABEL[node.type]}`,
+          'reward',
+          crit ? '✦' : '+'
+        );
         // continue harvesting costs stamina up-front
         if (patch.harvesting) {
           set({ stamina: get().stamina - HARVEST_STAMINA });
@@ -652,6 +769,8 @@ export const useGame = create<GameState>((set, get) => {
       } else if (t.kind === 'building') {
         audio.sfx('ui');
         set({ selectedPlot: t.id, panel: 'build' });
+      } else if (t.kind === 'event') {
+        get().collectEvent();
       }
     },
 
@@ -823,6 +942,66 @@ export const useGame = create<GameState>((set, get) => {
       get().addToast(`Bought ${amount} ${RESOURCE_LABEL[type]} for ◆${cost}`, 'info', '⚖');
     },
 
+    buyProvision: (id) => {
+      const s = get();
+      const def = PROVISIONS.find((p) => p.id === id);
+      if (!def) return;
+      if (def.requires && !s.plots.some((p) => p.building === def.requires && p.construction === 0)) {
+        get().addToast('That provision is not for sale yet.', 'warn', '!');
+        return;
+      }
+      if (s.stamina >= s.staminaMax) {
+        get().addToast('You are already at full stamina.', 'info');
+        return;
+      }
+      if (s.bswx < def.cost) {
+        get().addToast('Not enough BSWX for that.', 'warn', '!');
+        audio.sfx('error');
+        return;
+      }
+      const stamina = Math.min(s.staminaMax, s.stamina + def.stamina);
+      set({ bswx: s.bswx - def.cost, stamina });
+      staminaWarned = false;
+      audio.sfx('coin');
+      get().addToast(`Ate ${def.name}. +${Math.round(stamina - s.stamina)} stamina!`, 'reward', def.icon);
+    },
+
+    collectEvent: () => {
+      const s = get();
+      const ev = s.activeEvent;
+      if (!ev) return;
+      set({ activeEvent: null, nextEventIn: rand(EVENT_MIN_GAP, EVENT_MAX_GAP) });
+      if (ev.kind === 'rush') {
+        const perTick = passiveIncomePerTick(s.plots, s.circulation);
+        const reward = Math.max(RUSH_MIN, Math.round(perTick * RUSH_TICK_VALUE * rand(0.8, 1.4)));
+        earn(reward);
+        audio.sfx('coin');
+        audio.sfx('crit');
+        get().addToast(`Market rush! The crowd spends ◆${reward}.`, 'reward', '⚡');
+      } else {
+        const type = ev.resource ?? 'wood';
+        const amount = 8 + Math.floor(Math.random() * 7) + Math.floor((s.level - 1) / 2);
+        set({ [type]: (s[type] as number) + amount } as never);
+        audio.sfx(type === 'wood' ? 'chop' : type === 'stone' ? 'mine' : 'dig');
+        audio.sfx('crit');
+        applyQuestEvent('gather', type, amount);
+        get().addToast(`Rich find! +${amount} ${RESOURCE_LABEL[type]}`, 'reward', '✨');
+      }
+      grantXp(12);
+    },
+
+    collectWelcomeBack: () => {
+      const wb = get().welcomeBack;
+      if (!wb) return;
+      set({ welcomeBack: null });
+      if (wb.bswx > 0) {
+        earn(wb.bswx);
+        audio.sfx('coin');
+        audio.playLevelUp();
+        get().addToast(`Collected ◆${wb.bswx} earned while you were away.`, 'reward', '◆');
+      }
+    },
+
     save: () => {
       try {
         const s = get();
@@ -831,13 +1010,14 @@ export const useGame = create<GameState>((set, get) => {
           appearance: s.appearance,
           px: s.px, pz: s.pz,
           bswx: s.bswx, wood: s.wood, stone: s.stone, clay: s.clay,
-          food: s.food, goods: s.goods, marketPrices: s.marketPrices,
+          food: s.food, goods: s.goods, marketPrices: s.marketPrices, circulation: s.circulation,
           stamina: s.stamina, staminaMax: s.staminaMax,
           reputation: s.reputation, level: s.level, xp: s.xp, totalEarned: s.totalEarned,
           timeOfDay: s.timeOfDay, day: s.day,
           quests: s.quests, trackedQuest: s.trackedQuest,
           plots: s.plots,
           nodes: s.nodes.map((n) => ({ id: n.id, hp: n.hp, regrow: Math.round(n.regrow) })),
+          lastSeen: Date.now(),
         };
         localStorage.setItem(SAVE_KEY, JSON.stringify(data));
         set({ hasSave: true });
@@ -890,6 +1070,57 @@ export const useGame = create<GameState>((set, get) => {
     if (!npc || npc.length === 0) return '...';
     return npc[Math.floor(Math.random() * npc.length)];
   }
+
+  /** Spawn a Market Rush (at a business) or a Rich Find (at a resource node). */
+  function spawnEvent() {
+    const s = get();
+    const businesses = s.plots.filter(
+      (p) => p.building && p.construction === 0 && BUILDINGS[p.building].income > 0
+    );
+    const aliveNodes = s.nodes.filter((n) => n.hp > 0);
+
+    let ev: GameEvent | null = null;
+    const preferRush = businesses.length > 0 && (Math.random() < 0.6 || aliveNodes.length === 0);
+
+    if (preferRush) {
+      const p = businesses[Math.floor(Math.random() * businesses.length)];
+      const cfg = BUILDINGS[p.building!];
+      ev = {
+        id: `ev${eventId++}`,
+        kind: 'rush',
+        anchorId: p.id,
+        x: p.x,
+        z: p.z,
+        title: `Market Rush — ${cfg.name}`,
+        hint: 'Customers are pouring in — collect the rush!',
+        timeLeft: EVENT_WINDOW,
+        duration: EVENT_WINDOW,
+      };
+    } else if (aliveNodes.length > 0) {
+      const n = aliveNodes[Math.floor(Math.random() * aliveNodes.length)];
+      ev = {
+        id: `ev${eventId++}`,
+        kind: 'cache',
+        anchorId: n.id,
+        x: n.x,
+        z: n.z,
+        resource: n.type,
+        title: `Rich Find — ${RESOURCE_LABEL[n.type]}`,
+        hint: `A rich seam of ${RESOURCE_LABEL[n.type]} — grab it fast!`,
+        timeLeft: EVENT_WINDOW,
+        duration: EVENT_WINDOW,
+      };
+    }
+
+    if (ev) {
+      set({ activeEvent: ev, nextEventIn: rand(EVENT_MIN_GAP, EVENT_MAX_GAP) });
+      get().addToast(`${ev.title} — hurry!`, 'quest', '⚡');
+      audio.sfx('questReady');
+    } else {
+      // nothing to anchor to yet — check again shortly
+      set({ nextEventIn: 20 });
+    }
+  }
 });
 
 // debug handle (harmless in prod, invaluable when investigating live issues)
@@ -927,6 +1158,23 @@ function loadSave(): Partial<GameState> | null {
     // merge saved quests with definitions (handles new quests added later)
     const quests = initialQuestsMerge(data.quests ?? {});
 
+    const plots = (data.plots ?? generatePlots()) as Plot[];
+    const circulation = data.circulation ?? 1;
+
+    // offline earnings — accrue passive income for time spent away (capped)
+    let welcomeBack: WelcomeBack | null = null;
+    if (data.lastSeen) {
+      const elapsed = Math.max(0, (Date.now() - data.lastSeen) / 1000);
+      if (elapsed >= OFFLINE_MIN_SECONDS) {
+        const perTick = passiveIncomePerTick(plots, circulation);
+        if (perTick > 0) {
+          const ticks = Math.floor(Math.min(elapsed, OFFLINE_CAP) / ECONOMY_TICK);
+          const bswx = Math.round(perTick * ticks * OFFLINE_EFFICIENCY);
+          if (bswx >= 1) welcomeBack = { seconds: Math.min(elapsed, OFFLINE_CAP), bswx };
+        }
+      }
+    }
+
     return {
       appearance: { ...DEFAULT_APPEARANCE, ...(data.appearance ?? {}) },
       px: data.px ?? 0,
@@ -939,6 +1187,7 @@ function loadSave(): Partial<GameState> | null {
       staminaMax: data.staminaMax ?? 100,
       food: data.food ?? 6,
       goods: data.goods ?? 0,
+      circulation,
       marketPrices: { wood: 2, stone: 2.4, clay: 3, goods: 4, ...(data.marketPrices ?? {}) },
       reputation: data.reputation ?? 0,
       level: data.level ?? 1,
@@ -948,9 +1197,10 @@ function loadSave(): Partial<GameState> | null {
       day: data.day ?? 1,
       quests,
       trackedQuest: data.trackedQuest ?? null,
-      plots: (data.plots ?? generatePlots()) as Plot[],
+      plots,
       nodes,
       nodesVersion: 1,
+      welcomeBack,
     };
   } catch {
     return null;

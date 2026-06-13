@@ -15,6 +15,7 @@ export type SfxName =
   | 'questAccept'
   | 'questReady'
   | 'footstep'
+  | 'crit'
   | 'error';
 
 const MUSIC_VOL = 0.35;
@@ -253,6 +254,12 @@ class AudioManager {
         break;
       case 'footstep':
         this.noise(0.03, 350, 0.12, t);
+        break;
+      case 'crit':
+        // bright rising sparkle — rewards a lucky "rich vein"
+        this.blip(784, 0.07, 'triangle', 0.22, t);
+        this.blip(1047, 0.07, 'triangle', 0.22, t + 0.05);
+        this.blip(1568, 0.16, 'sine', 0.24, t + 0.1);
         break;
       case 'error':
         this.blip(160, 0.15, 'sawtooth', 0.18, t);

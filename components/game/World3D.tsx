@@ -31,6 +31,79 @@ export default function World3D() {
       <Lamps />
       <MoveMarker />
       <InteractHighlight />
+      <EventBeacon />
+    </group>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Live-event beacon — a pulsing pillar of light over the active Market Rush /
+// Rich Find. Reads the store imperatively so it never forces React re-renders.
+// ---------------------------------------------------------------------------
+
+function EventBeacon() {
+  const group = useRef<THREE.Group>(null);
+  const core = useRef<THREE.Mesh>(null);
+  const beam = useRef<THREE.Mesh>(null);
+  const ring = useRef<THREE.Mesh>(null);
+  const col = useMemo(() => new THREE.Color(), []);
+
+  useFrame((state) => {
+    const ev = useGame.getState().activeEvent;
+    const g = group.current;
+    if (!g) return;
+    if (!ev) {
+      g.visible = false;
+      return;
+    }
+    g.visible = true;
+    g.position.set(ev.x, 0, ev.z);
+
+    const t = state.clock.elapsedTime;
+    col.set(ev.kind === 'rush' ? '#ffd54f' : '#5eead4');
+    const urgency = 1 - ev.timeLeft / ev.duration; // beats faster as time runs out
+    const pulse = 0.6 + Math.sin(t * (4 + urgency * 9)) * 0.4;
+
+    if (core.current) {
+      core.current.rotation.y = t * 1.6;
+      core.current.position.y = 3 + Math.sin(t * 2) * 0.2;
+      (core.current.material as THREE.MeshBasicMaterial).color.copy(col);
+      core.current.scale.setScalar(0.9 + pulse * 0.3);
+    }
+    if (beam.current) {
+      const m = beam.current.material as THREE.MeshBasicMaterial;
+      m.color.copy(col);
+      m.opacity = 0.16 + pulse * 0.16;
+    }
+    if (ring.current) {
+      const m = ring.current.material as THREE.MeshBasicMaterial;
+      m.color.copy(col);
+      m.opacity = 0.4 + pulse * 0.3;
+      ring.current.scale.setScalar(1 + Math.sin(t * 3) * 0.15);
+    }
+  });
+
+  return (
+    <group ref={group} visible={false}>
+      <mesh ref={beam} position={[0, 3.2, 0]}>
+        <cylinderGeometry args={[0.45, 0.7, 6.4, 16, 1, true]} />
+        <meshBasicMaterial
+          color="#ffd54f"
+          transparent
+          opacity={0.25}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+      <mesh ref={core} position={[0, 3, 0]}>
+        <octahedronGeometry args={[0.5, 0]} />
+        <meshBasicMaterial color="#ffd54f" transparent opacity={0.95} />
+      </mesh>
+      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.08, 0]}>
+        <ringGeometry args={[1.2, 1.6, 32]} />
+        <meshBasicMaterial color="#ffd54f" transparent opacity={0.5} depthWrite={false} />
+      </mesh>
     </group>
   );
 }

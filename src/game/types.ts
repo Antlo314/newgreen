@@ -176,10 +176,62 @@ export interface Toast {
 }
 
 export interface InteractTarget {
-  kind: 'node' | 'npc' | 'plot' | 'building';
+  kind: 'node' | 'npc' | 'plot' | 'building' | 'event';
   id: string;
   label: string;
   verb: string;
   x: number;
   z: number;
+}
+
+// ---------------------------------------------------------------------------
+// Live events, offline earnings & harvest juice
+// ---------------------------------------------------------------------------
+
+export type GameEventKind = 'rush' | 'cache';
+
+/** A short, time-limited beacon the player runs to and collects for a windfall. */
+export interface GameEvent {
+  id: string;
+  kind: GameEventKind;
+  /** plot id (rush) or node id (cache) the beacon is anchored to */
+  anchorId: string;
+  x: number;
+  z: number;
+  title: string;
+  hint: string;
+  /** resource type granted by a 'cache' event */
+  resource?: ResourceType;
+  /** seconds remaining before the beacon vanishes */
+  timeLeft: number;
+  /** total window length, for the countdown bar */
+  duration: number;
+}
+
+/** Ephemeral floating number shown when a harvest lands. */
+export interface HarvestPop {
+  id: number;
+  amount: number;
+  type: ResourceType;
+  crit: boolean;
+  combo: number;
+}
+
+/** Accrued passive income while the player was away. */
+export interface WelcomeBack {
+  seconds: number;
+  bswx: number;
+}
+
+export interface ProvisionDef {
+  id: string;
+  name: string;
+  icon: string;
+  /** BSWX cost */
+  cost: number;
+  /** stamina restored (use a large number for a full refill) */
+  stamina: number;
+  desc: string;
+  /** building that must be operational before this is sold */
+  requires?: BuildingId;
 }

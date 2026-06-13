@@ -11,13 +11,16 @@ export default function HUD() {
     <div className="pointer-events-none absolute inset-0 z-10 select-none">
       <TopBar />
       <QuestTracker />
+      <EventBanner />
       <div className="absolute right-3 top-16 hidden sm:block">
         <Minimap size={148} />
       </div>
       <InteractPrompt />
+      <HarvestPop />
       <Toasts />
       <HotkeyBar />
       <MobileControls />
+      <WelcomeBackModal />
     </div>
   );
 }
@@ -305,9 +308,105 @@ function MobileControls() {
           }}
           className="pointer-events-auto absolute bottom-16 right-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-amber-400/60 bg-black/60 text-xl font-bold text-amber-300 backdrop-blur-sm active:scale-95"
         >
-          {target.verb === 'Talk' ? '💬' : target.verb === 'Build' || target.verb === 'Manage' ? '⚒️' : '✊'}
+          {target.verb === 'Talk'
+            ? '💬'
+            : target.verb === 'Collect'
+              ? '⚡'
+              : target.verb === 'Build' || target.verb === 'Manage'
+                ? '⚒️'
+                : '✊'}
         </button>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Live event banner — counts down the active Market Rush / Rich Find.
+// ---------------------------------------------------------------------------
+
+function EventBanner() {
+  const ev = useGame((s) => s.activeEvent);
+  if (!ev) return null;
+  const pct = Math.max(0, Math.min(100, (ev.timeLeft / ev.duration) * 100));
+  const secs = Math.max(0, Math.ceil(ev.timeLeft));
+  return (
+    <div className="pointer-events-none absolute left-1/2 top-16 w-[min(88vw,320px)] -translate-x-1/2">
+      <div className="animate-eventPulse rounded-xl border border-amber-300/50 bg-black/70 px-3 py-2 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-base leading-none">⚡</span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-xs font-bold text-amber-200">{ev.title}</div>
+            <div className="truncate text-[10px] text-white/70">{ev.hint}</div>
+          </div>
+          <span className="text-sm font-extrabold tabular-nums text-amber-300">{secs}s</span>
+        </div>
+        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/15">
+          <div className="h-full rounded-full bg-amber-400" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Floating "+N" reward number that pops above the harvest bar on each swing.
+// ---------------------------------------------------------------------------
+
+const RES_ICON: Record<string, string> = { wood: '🪵', stone: '🪨', clay: '🧱' };
+
+function HarvestPop() {
+  const pop = useGame((s) => s.harvestPop);
+  if (!pop) return null;
+  return (
+    <div className="absolute bottom-44 left-1/2 sm:bottom-36">
+      <div
+        key={pop.id}
+        className={`animate-popUp whitespace-nowrap font-extrabold drop-shadow-[0_2px_3px_rgba(0,0,0,0.7)] ${
+          pop.crit ? 'text-2xl text-amber-300' : 'text-lg text-emerald-200'
+        }`}
+      >
+        {pop.crit && <span className="mr-1">RICH VEIN!</span>}+{pop.amount} {RES_ICON[pop.type]}
+        {pop.combo >= 3 && (
+          <span className="ml-1.5 align-middle text-xs font-bold text-amber-300/90">×{pop.combo}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Welcome-back modal — offline earnings payout on load.
+// ---------------------------------------------------------------------------
+
+function WelcomeBackModal() {
+  const wb = useGame((s) => s.welcomeBack);
+  const collect = useGame((s) => s.collectWelcomeBack);
+  if (!wb) return null;
+  const h = Math.floor(wb.seconds / 3600);
+  const m = Math.floor((wb.seconds % 3600) / 60);
+  const away = h > 0 ? `${h}h ${m}m` : `${Math.max(1, m)}m`;
+  const amount = wb.bswx.toLocaleString();
+  return (
+    <div className="pointer-events-auto absolute inset-0 z-30 flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]">
+      <div className="animate-scaleIn w-full max-w-xs rounded-2xl border border-amber-300/30 bg-[#161310]/95 p-5 text-center shadow-2xl">
+        <div className="text-3xl">🌅</div>
+        <h2 className="mt-2 text-sm font-bold uppercase tracking-widest text-amber-300">Welcome Back</h2>
+        <p className="mt-1 text-xs leading-relaxed text-white/70">
+          While you were away <span className="font-semibold text-white">{away}</span>, Greenwood&apos;s businesses kept
+          the dollar circulating.
+        </p>
+        <div className="my-4 rounded-xl border border-amber-400/30 bg-amber-400/10 py-3">
+          <div className="text-[10px] uppercase tracking-wider text-amber-200/70">Earnings while away</div>
+          <div className="text-2xl font-extrabold text-amber-300">◆{amount}</div>
+        </div>
+        <button
+          onClick={collect}
+          className="w-full rounded-xl border border-amber-400/50 bg-amber-400/20 py-2.5 text-sm font-bold text-amber-100 transition hover:bg-amber-400/30 active:scale-95"
+        >
+          Collect ◆{amount}
+        </button>
+      </div>
     </div>
   );
 }

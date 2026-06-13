@@ -6,6 +6,7 @@ import {
   BUILDINGS,
   MAX_BUILDING_LEVEL,
   NPC_BY_ID,
+  PROVISIONS,
   QUESTS,
   QUEST_BY_ID,
   UPGRADE_COST_MULT,
@@ -388,6 +389,46 @@ function MarketPanel() {
           </div>
         );
       })}
+
+      <Provisions />
+    </div>
+  );
+}
+
+function Provisions() {
+  const s = useGame();
+  const full = s.stamina >= s.staminaMax;
+  return (
+    <div className="border-t border-white/10 pt-3">
+      <h3 className="mb-1 text-[10px] font-bold uppercase tracking-widest text-white/50">Provisions</h3>
+      <p className="mb-2 text-[11px] leading-relaxed text-white/55">
+        Grab a bite to refill stamina instantly — no waiting around to get back to work.
+      </p>
+      <div className="space-y-2">
+        {PROVISIONS.map((p) => {
+          const available = !p.requires || s.plots.some((pl) => pl.building === p.requires && pl.construction === 0);
+          const afford = s.bswx >= p.cost;
+          const disabled = !available || !afford || full;
+          return (
+            <div key={p.id} className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 p-2.5">
+              <span className="text-lg">{p.icon}</span>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold text-white">{p.name}</div>
+                <div className="text-[10px] text-white/50">
+                  {available ? p.desc : `Build the ${BUILDINGS[p.requires!].name} to unlock.`}
+                </div>
+              </div>
+              <button
+                disabled={disabled}
+                onClick={() => s.buyProvision(p.id)}
+                className="shrink-0 rounded-lg border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 text-[11px] font-bold text-amber-200 transition hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                {full ? 'Full' : `Eat ◆${p.cost}`}
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -435,9 +476,16 @@ function HelpPanel() {
         <b>workshop</b> crafts 📦 goods from spare lumber; the <b>Sugar Bowl, hotel, and Cultural Hall</b> sell those
         goods. Every active link raises your <b>⟳ circulation multiplier</b> — and employed residents raise it further.
       </Section>
-      <Section h="The Exchange">
+      <Section h="The Exchange & Provisions">
         Press <Kbd>T</Kbd> at any time (once a grocery is built) to trade lumber, stone, clay, and goods at prices that
-        drift every tick. Sell high, buy what the next build needs.
+        drift every tick. Sell high, buy what the next build needs — and grab a <b>provision</b> (🍞/🥧) to instantly
+        refill stamina so you never stand around resting.
+      </Section>
+      <Section h="Rushes & Rich Finds">
+        Keep an eye out for golden <b>⚡ beacons</b> that appear around town — run over and press <Kbd>E</Kbd> before the
+        timer runs out for an instant windfall of BSWX or resources. Harvesting the same way for a while builds a
+        <b> combo</b> that boosts your chance of a <b>RICH VEIN</b> crit (double yield). And whatever your businesses earn
+        while you&apos;re away is waiting for you when you return.
       </Section>
       <Section h="Quests">
         Blue markers = new quests. Gold markers = ready to turn in. Press <Kbd>Q</Kbd> for the quest log,{' '}

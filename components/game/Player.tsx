@@ -329,6 +329,22 @@ function updateInteractTarget(x: number, z: number, s: GS) {
     }
   }
 
+  // live event beacon — wins priority within a generous range (it's on a timer)
+  const ev = s.activeEvent;
+  if (ev) {
+    const d = (x - ev.x) ** 2 + (z - ev.z) ** 2;
+    if (d < 4.2 ** 2) {
+      best = {
+        kind: 'event',
+        id: `event:${ev.id}`,
+        label: ev.kind === 'rush' ? 'the Market Rush' : 'the Rich Find',
+        verb: 'Collect',
+        x: ev.x,
+        z: ev.z,
+      };
+    }
+  }
+
   s.setInteractTarget(best);
 }
 
