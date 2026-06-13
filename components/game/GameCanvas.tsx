@@ -8,6 +8,7 @@ import World3D from './World3D';
 import Buildings from './Buildings';
 import NPCs from './NPCs';
 import Residents from './Residents';
+import Encounters from './Encounters';
 import Effects from './Effects';
 import { useGame } from '../../src/game/store';
 
@@ -26,6 +27,7 @@ export default function GameCanvas() {
         <Buildings />
         <NPCs />
         <Residents />
+        <Encounters />
         <Player />
         <Effects />
       </Suspense>

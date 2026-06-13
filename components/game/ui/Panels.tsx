@@ -4,6 +4,7 @@ import React from 'react';
 import { useGame } from '../../../src/game/store';
 import {
   BUILDINGS,
+  LOAN_TIERS,
   MAX_BUILDING_LEVEL,
   NPC_BY_ID,
   PROVISIONS,
@@ -25,6 +26,9 @@ export default function Panels() {
       {panel === 'build' && <Modal title="Greenwood Land Office"><BuildMenu /></Modal>}
       {panel === 'map' && <Modal title="District Map"><MapPanel /></Modal>}
       {panel === 'market' && <Modal title="Greenwood Exchange"><MarketPanel /></Modal>}
+      {panel === 'merchant' && <Modal title="Traveling Merchant"><MerchantPanel /></Modal>}
+      {panel === 'loan' && <Modal title="Back-Alley Lending"><LoanPanel /></Modal>}
+      {panel === 'speculator' && <Modal title="An Outside Offer"><SpeculatorPanel /></Modal>}
       {panel === 'help' && <Modal title="How to Play"><HelpPanel /></Modal>}
     </>
   );
@@ -435,6 +439,180 @@ function Provisions() {
 
 // ---------------------------------------------------------------------------
 
+function MerchantPanel() {
+  const s = useGame();
+  const m = s.merchant;
+  if (!m) return <div className="text-xs text-white/60">The merchant has packed up and moved on.</div>;
+  const trustLabel = m.trust > 1 ? 'Trusts you' : m.trust < -1 ? 'Wary of you' : 'Neutral';
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] leading-relaxed text-white/60">
+        <span className="font-semibold text-white">{m.name}</span> deals in mystery crates. One is a{' '}
+        <b className="text-emerald-300">steal</b>, one is <b>fair</b>, and one is pure{' '}
+        <b className="text-red-300">snake oil</b> — but they&apos;re face-down. Inspect one for free, then gamble on the
+        rest. <span className="text-white/40">({trustLabel})</span>
+      </p>
+      <div className="text-[10px] text-white/45">
+        Free inspections left: <span className="font-bold text-amber-300">{m.inspectsLeft}</span>
+      </div>
+      <div className="space-y-2">
+        {m.deals.map((d) => {
+          const afford = s.bswx >= d.cost;
+          const qcolor =
+            d.quality === 'steal' ? 'text-emerald-300' : d.quality === 'ripoff' ? 'text-red-300' : 'text-white/80';
+          return (
+            <div
+              key={d.id}
+              className={`rounded-xl border p-3 ${d.sold ? 'border-white/5 bg-white/[0.02] opacity-60' : 'border-white/10 bg-white/5'}`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-white">
+                  {d.mystery && !d.sold ? '❓ Mystery Crate' : <>📦 <span className={qcolor}>{d.label}</span></>}
+                </span>
+                <span className="text-xs font-bold text-amber-300">◆{d.cost}</span>
+              </div>
+              {!d.mystery && (
+                <div className={`mt-0.5 text-[10px] ${qcolor}`}>
+                  {d.quality === 'steal' ? 'A genuine bargain.' : d.quality === 'ripoff' ? 'Looks worthless…' : 'A fair exchange.'}
+                </div>
+              )}
+              <div className="mt-2 flex gap-1.5">
+                {d.sold ? (
+                  <span className="text-[11px] font-bold text-white/40">Purchased</span>
+                ) : (
+                  <>
+                    {d.mystery && (
+                      <button
+                        disabled={m.inspectsLeft <= 0}
+                        onClick={() => s.inspectDeal(d.id)}
+                        className="rounded-lg border border-sky-400/40 bg-sky-400/10 px-2.5 py-1 text-[11px] font-bold text-sky-200 transition hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        🔍 Inspect
+                      </button>
+                    )}
+                    <button
+                      disabled={!afford}
+                      onClick={() => s.buyDeal(d.id)}
+                      className="rounded-lg border border-amber-400/50 bg-amber-400/15 px-3 py-1 text-[11px] font-bold text-amber-200 transition hover:bg-amber-400/25 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      {d.mystery ? 'Buy blind' : 'Buy'} ◆{d.cost}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LoanPanel() {
+  const s = useGame();
+  const loan = s.loan;
+  if (loan) {
+    const overdue = s.day > loan.dueDay;
+    const payable = Math.min(loan.owed, Math.floor(s.bswx));
+    return (
+      <div className="space-y-3">
+        <div className={`rounded-xl border p-3 ${overdue ? 'border-red-400/50 bg-red-500/10' : 'border-amber-400/30 bg-amber-400/5'}`}>
+          <div className="text-sm font-bold text-white">Outstanding Debt</div>
+          <div className="mt-1 text-2xl font-extrabold text-amber-300">◆{loan.owed}</div>
+          <div className="mt-0.5 text-[11px] text-white/60">
+            Borrowed ◆{loan.principal} · due day {loan.dueDay}{' '}
+            {overdue && <span className="font-bold text-red-300">(OVERDUE — growing every dawn!)</span>}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {[50, 100].map((a) => (
+            <button
+              key={a}
+              disabled={s.bswx < 1}
+              onClick={() => s.repayLoan(a)}
+              className="rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-bold text-emerald-200 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              Repay ◆{a}
+            </button>
+          ))}
+          <button
+            disabled={s.bswx < 1}
+            onClick={() => s.repayLoan(loan.owed)}
+            className="rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 text-[11px] font-bold text-emerald-200 transition hover:bg-emerald-400/20 disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            Pay in full (◆{payable})
+          </button>
+        </div>
+        <p className="text-[11px] leading-relaxed text-white/50">
+          Clear it before the due day. Miss it and the debt swells each dawn — and the street notices (your reputation
+          falls).
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] leading-relaxed text-white/60">
+        Quick BSWX, no questions asked — but the shark always takes his cut. Borrow to leap ahead, then repay before the
+        due day or the debt grows.
+      </p>
+      <div className="space-y-2">
+        {LOAN_TIERS.map((t, i) => {
+          const owed = Math.round(t.principal * (1 + t.rate));
+          return (
+            <button
+              key={i}
+              onClick={() => s.takeLoan(i)}
+              className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 p-3 text-left transition hover:border-amber-400/50 hover:bg-amber-400/10"
+            >
+              <div>
+                <div className="text-sm font-bold text-white">Borrow ◆{t.principal}</div>
+                <div className="text-[10px] text-white/55">Repay ◆{owed} within {t.days} days</div>
+              </div>
+              <span className="text-[11px] font-bold text-red-300">+{Math.round(t.rate * 100)}%</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SpeculatorPanel() {
+  const s = useGame();
+  const offer = s.speculatorOffer;
+  if (!offer) return <div className="text-xs text-white/60">The speculator has moved on.</div>;
+  return (
+    <div className="space-y-3 text-center">
+      <div className="text-3xl">🎩</div>
+      <p className="text-xs leading-relaxed text-white/75">
+        A slick outside investor wants to buy your <b className="text-fuchsia-300">{offer.buildingName}</b>. Quick cash
+        today — but the income, the jobs it holds, and a piece of Greenwood go with it.
+      </p>
+      <div className="rounded-xl border border-fuchsia-400/30 bg-fuchsia-400/10 py-3">
+        <div className="text-[10px] uppercase tracking-wider text-fuchsia-200/70">Their Offer</div>
+        <div className="text-2xl font-extrabold text-fuchsia-200">◆{offer.amount}</div>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => s.declineBuyout()}
+          className="flex-1 rounded-xl border border-emerald-400/50 bg-emerald-400/15 py-2.5 text-sm font-bold text-emerald-100 transition hover:bg-emerald-400/25 active:scale-95"
+        >
+          ✊ Refuse (+3 rep)
+        </button>
+        <button
+          onClick={() => s.acceptBuyout()}
+          className="flex-1 rounded-xl border border-white/15 bg-white/5 py-2.5 text-sm font-bold text-white/70 transition hover:bg-white/10 active:scale-95"
+        >
+          Sell out (−8 rep)
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 function MapPanel() {
   return (
     <div className="flex flex-col items-center gap-3">
@@ -486,6 +664,18 @@ function HelpPanel() {
         timer runs out for an instant windfall of BSWX or resources. Harvesting the same way for a while builds a
         <b> combo</b> that boosts your chance of a <b>RICH VEIN</b> crit (double yield). And whatever your businesses earn
         while you&apos;re away is waiting for you when you return.
+      </Section>
+      <Section h="Strangers in Town">
+        <b>🛒 The Traveling Merchant</b> rolls in with face-down mystery crates — one steal, one fair, one snake-oil.
+        Inspect one free, then gamble. The <b>🪙 Loan Shark</b> (booth east of the plaza) lends fast BSWX at steep
+        interest — repay before the due day or the debt grows and your reputation drops. And the <b>🎩 Speculator</b>
+        will offer big money for your businesses: sell out for quick cash and lost reputation, or refuse and keep
+        Greenwood whole.
+      </Section>
+      <Section h="Fortunes & Hard Times">
+        The town&apos;s luck swings: <b>🎉 Festivals</b> and <b>📈 booms</b> lift your income, while a <b>📉 Panic</b> or{' '}
+        <b>🥀 Blight</b> (the screen reddens) cuts it or stops your gardens. Keep a buffer of food and BSWX so the bad
+        spells can&apos;t sink you.
       </Section>
       <Section h="Quests">
         Blue markers = new quests. Gold markers = ready to turn in. Press <Kbd>Q</Kbd> for the quest log,{' '}

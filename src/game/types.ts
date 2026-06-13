@@ -154,6 +154,9 @@ export type PanelId =
   | 'dialogue'
   | 'map'
   | 'market'
+  | 'merchant'
+  | 'loan'
+  | 'speculator'
   | 'help'
   | 'settings';
 
@@ -176,7 +179,7 @@ export interface Toast {
 }
 
 export interface InteractTarget {
-  kind: 'node' | 'npc' | 'plot' | 'building' | 'event';
+  kind: 'node' | 'npc' | 'plot' | 'building' | 'event' | 'merchant' | 'lender' | 'speculator';
   id: string;
   label: string;
   verb: string;
@@ -234,4 +237,86 @@ export interface ProvisionDef {
   desc: string;
   /** building that must be operational before this is sold */
   requires?: BuildingId;
+}
+
+// ---------------------------------------------------------------------------
+// Strangers in town: the Traveling Merchant, the Loan Shark, the Speculator
+// ---------------------------------------------------------------------------
+
+export type DealQuality = 'steal' | 'fair' | 'ripoff';
+
+/** A single crate on the merchant's table — its contents are hidden until
+ *  inspected or bought, and some are deliberately bad ("snake oil"). */
+export interface MerchantDeal {
+  id: number;
+  /** BSWX the player pays */
+  cost: number;
+  /** what's actually inside */
+  reward: { wood?: number; stone?: number; clay?: number; goods?: number; bswx?: number; stamina?: number };
+  quality: DealQuality;
+  /** label shown once revealed */
+  label: string;
+  /** still face-down? */
+  mystery: boolean;
+  /** already purchased this visit */
+  sold: boolean;
+}
+
+export interface MerchantState {
+  name: string;
+  x: number;
+  z: number;
+  deals: MerchantDeal[];
+  /** free inspections remaining this visit */
+  inspectsLeft: number;
+  /** trust −3..+3; rises with fair dealing, sinks if you snub him */
+  trust: number;
+  timeLeft: number;
+  duration: number;
+}
+
+export interface LoanState {
+  principal: number;
+  owed: number;
+  /** in-game day the balance is due */
+  dueDay: number;
+  overdue: boolean;
+}
+
+export interface LoanTier {
+  principal: number;
+  /** upfront interest fraction (owed = principal * (1 + rate)) */
+  rate: number;
+  /** days until due */
+  days: number;
+}
+
+export interface SpeculatorOffer {
+  plotId: string;
+  buildingName: string;
+  /** BSWX offered for the building */
+  amount: number;
+  x: number;
+  z: number;
+  timeLeft: number;
+  duration: number;
+}
+
+export type FortuneKind = 'festival' | 'boom' | 'panic' | 'blight';
+
+/** A town-wide temporary modifier — good (festival/boom) or bad (panic/blight). */
+export interface FortuneState {
+  kind: FortuneKind;
+  label: string;
+  desc: string;
+  icon: string;
+  good: boolean;
+  /** multiplier applied to economy income while active */
+  incomeMult: number;
+  /** gardens grow no food while true */
+  foodOff: boolean;
+  /** reputation change per economy tick */
+  repPerTick: number;
+  timeLeft: number;
+  duration: number;
 }

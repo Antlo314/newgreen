@@ -9,9 +9,11 @@ import Minimap from './Minimap';
 export default function HUD() {
   return (
     <div className="pointer-events-none absolute inset-0 z-10 select-none">
+      <FortuneTint />
       <TopBar />
       <QuestTracker />
-      <EventBanner />
+      <LoanBadge />
+      <HappeningsStack />
       <div className="absolute right-3 top-16 hidden sm:block">
         <Minimap size={148} />
       </div>
@@ -322,30 +324,103 @@ function MobileControls() {
 }
 
 // ---------------------------------------------------------------------------
-// Live event banner — counts down the active Market Rush / Rich Find.
+// Happenings stack — every active timed thing (event / fortune / merchant /
+// speculator) shown top-center with its own countdown.
 // ---------------------------------------------------------------------------
 
-function EventBanner() {
+type Tone = 'amber' | 'emerald' | 'red' | 'sky' | 'fuchsia';
+const TONE: Record<Tone, { border: string; text: string; bar: string }> = {
+  amber: { border: 'border-amber-300/50', text: 'text-amber-200', bar: 'bg-amber-400' },
+  emerald: { border: 'border-emerald-300/50', text: 'text-emerald-200', bar: 'bg-emerald-400' },
+  red: { border: 'border-red-400/60', text: 'text-red-200', bar: 'bg-red-400' },
+  sky: { border: 'border-sky-300/50', text: 'text-sky-200', bar: 'bg-sky-400' },
+  fuchsia: { border: 'border-fuchsia-300/50', text: 'text-fuchsia-200', bar: 'bg-fuchsia-400' },
+};
+
+interface Happening {
+  key: string;
+  icon: string;
+  title: string;
+  sub: string;
+  secs: number;
+  pct: number;
+  tone: Tone;
+  pulse?: boolean;
+}
+
+function HappeningsStack() {
   const ev = useGame((s) => s.activeEvent);
-  if (!ev) return null;
-  const pct = Math.max(0, Math.min(100, (ev.timeLeft / ev.duration) * 100));
-  const secs = Math.max(0, Math.ceil(ev.timeLeft));
+  const fortune = useGame((s) => s.fortune);
+  const merchant = useGame((s) => s.merchant);
+  const spec = useGame((s) => s.speculatorOffer);
+
+  const rows: Happening[] = [];
+  const pct = (t: number, d: number) => Math.max(0, Math.min(100, (t / d) * 100));
+  if (ev)
+    rows.push({ key: 'ev', icon: '⚡', title: ev.title, sub: ev.hint, secs: Math.ceil(ev.timeLeft), pct: pct(ev.timeLeft, ev.duration), tone: 'amber', pulse: true });
+  if (fortune)
+    rows.push({ key: 'fortune', icon: fortune.icon, title: fortune.label, sub: fortune.desc, secs: Math.ceil(fortune.timeLeft), pct: pct(fortune.timeLeft, fortune.duration), tone: fortune.good ? 'emerald' : 'red', pulse: !fortune.good });
+  if (merchant)
+    rows.push({ key: 'merch', icon: '🛒', title: `${merchant.name} — Trader`, sub: 'Deals at the plaza — go trade!', secs: Math.ceil(merchant.timeLeft), pct: pct(merchant.timeLeft, merchant.duration), tone: 'sky' });
+  if (spec)
+    rows.push({ key: 'spec', icon: '🎩', title: "Speculator's Offer", sub: `Eyeing your ${spec.buildingName}`, secs: Math.ceil(spec.timeLeft), pct: pct(spec.timeLeft, spec.duration), tone: 'fuchsia', pulse: true });
+
+  if (rows.length === 0) return null;
   return (
-    <div className="pointer-events-none absolute left-1/2 top-16 w-[min(88vw,320px)] -translate-x-1/2">
-      <div className="animate-eventPulse rounded-xl border border-amber-300/50 bg-black/70 px-3 py-2 backdrop-blur-sm">
-        <div className="flex items-center gap-2">
-          <span className="text-base leading-none">⚡</span>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-xs font-bold text-amber-200">{ev.title}</div>
-            <div className="truncate text-[10px] text-white/70">{ev.hint}</div>
+    <div className="pointer-events-none absolute left-1/2 top-16 w-[min(90vw,330px)] -translate-x-1/2 space-y-1.5">
+      {rows.map((r) => {
+        const c = TONE[r.tone];
+        return (
+          <div key={r.key} className={`rounded-xl border ${c.border} bg-black/70 px-3 py-1.5 backdrop-blur-sm ${r.pulse ? 'animate-eventPulse' : ''}`}>
+            <div className="flex items-center gap-2">
+              <span className="text-base leading-none">{r.icon}</span>
+              <div className="min-w-0 flex-1">
+                <div className={`truncate text-xs font-bold ${c.text}`}>{r.title}</div>
+                <div className="truncate text-[10px] text-white/65">{r.sub}</div>
+              </div>
+              <span className={`text-sm font-extrabold tabular-nums ${c.text}`}>{r.secs}s</span>
+            </div>
+            <div className="mt-1 h-1 overflow-hidden rounded-full bg-white/15">
+              <div className={`h-full rounded-full ${c.bar}`} style={{ width: `${r.pct}%` }} />
+            </div>
           </div>
-          <span className="text-sm font-extrabold tabular-nums text-amber-300">{secs}s</span>
-        </div>
-        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/15">
-          <div className="h-full rounded-full bg-amber-400" style={{ width: `${pct}%` }} />
-        </div>
-      </div>
+        );
+      })}
     </div>
+  );
+}
+
+// Loan-shark debt badge — sits under the quest tracker, reddens when overdue.
+function LoanBadge() {
+  const loan = useGame((s) => s.loan);
+  const day = useGame((s) => s.day);
+  const setPanel = useGame((s) => s.setPanel);
+  if (!loan) return null;
+  const overdue = day > loan.dueDay;
+  return (
+    <button
+      onClick={() => setPanel('loan')}
+      className={`pointer-events-auto absolute left-2 top-[148px] rounded-lg border px-2.5 py-1.5 text-left backdrop-blur-sm transition sm:left-3 sm:top-44 ${
+        overdue ? 'animate-eventPulse border-red-400/60 bg-red-500/20' : 'border-amber-400/40 bg-black/60 hover:bg-black/75'
+      }`}
+    >
+      <div className="text-[10px] font-bold uppercase tracking-wider text-red-300">{overdue ? '⚠ Debt Overdue!' : '🪙 Loan Shark Debt'}</div>
+      <div className="text-xs font-bold text-white">
+        ◆{loan.owed} <span className="font-normal text-white/50">· due day {loan.dueDay}</span>
+      </div>
+    </button>
+  );
+}
+
+// Red vignette while a bad fortune (panic / blight) grips the town.
+function FortuneTint() {
+  const fortune = useGame((s) => s.fortune);
+  if (!fortune || fortune.good) return null;
+  return (
+    <div
+      className="pointer-events-none absolute inset-0"
+      style={{ boxShadow: 'inset 0 0 160px 50px rgba(130,22,22,0.34)' }}
+    />
   );
 }
 

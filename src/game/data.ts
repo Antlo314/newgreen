@@ -1,4 +1,12 @@
-import type { BuildingConfig, BuildingId, NPCDef, ProvisionDef, QuestDef } from './types';
+import type {
+  BuildingConfig,
+  BuildingId,
+  FortuneKind,
+  LoanTier,
+  NPCDef,
+  ProvisionDef,
+  QuestDef,
+} from './types';
 
 // ---------------------------------------------------------------------------
 // BUILDINGS
@@ -351,6 +359,79 @@ export const PROVISIONS: ProvisionDef[] = [
     stamina: 9999,
     desc: "Williams' famous sweet — restores ALL of your stamina.",
     requires: 'sugarbowl',
+  },
+];
+
+// ---------------------------------------------------------------------------
+// STRANGERS IN TOWN — positions & tuning
+// ---------------------------------------------------------------------------
+
+/** The Loan Shark keeps a permanent shady booth at the plaza's edge. */
+export const LENDER_POS = { x: 18.5, z: 7.5 };
+/** Where the Traveling Merchant pitches his stall when he rolls into town. */
+export const MERCHANT_POS = { x: -7, z: 3 };
+/** Where the Speculator waits while his buyout offer stands. */
+export const SPECULATOR_POS = { x: 7, z: -4 };
+
+/** Loan options offered by the shark. owed = principal * (1 + rate). */
+export const LOAN_TIERS: LoanTier[] = [
+  { principal: 100, rate: 0.2, days: 2 },
+  { principal: 300, rate: 0.3, days: 3 },
+  { principal: 700, rate: 0.4, days: 4 },
+];
+
+export interface FortuneTemplate {
+  kind: FortuneKind;
+  label: string;
+  desc: string;
+  icon: string;
+  good: boolean;
+  incomeMult: number;
+  foodOff: boolean;
+  repPerTick: number;
+}
+
+/** Town-wide fortunes — periodic good or bad spells that swing the economy. */
+export const FORTUNES: FortuneTemplate[] = [
+  {
+    kind: 'festival',
+    label: 'Greenwood Festival',
+    desc: 'The streets fill with music and trade — income and reputation soar.',
+    icon: '🎉',
+    good: true,
+    incomeMult: 1.6,
+    foodOff: false,
+    repPerTick: 1,
+  },
+  {
+    kind: 'boom',
+    label: 'Market Boom',
+    desc: 'Demand is hot across the Exchange — every business earns more.',
+    icon: '📈',
+    good: true,
+    incomeMult: 1.4,
+    foodOff: false,
+    repPerTick: 0,
+  },
+  {
+    kind: 'panic',
+    label: 'Market Panic',
+    desc: 'Prices crash and customers tighten their belts — income slumps.',
+    icon: '📉',
+    good: false,
+    incomeMult: 0.55,
+    foodOff: false,
+    repPerTick: 0,
+  },
+  {
+    kind: 'blight',
+    label: 'Garden Blight',
+    desc: 'A blight withers the gardens — no food grows until it passes.',
+    icon: '🥀',
+    good: false,
+    incomeMult: 0.85,
+    foodOff: true,
+    repPerTick: 0,
   },
 ];
 

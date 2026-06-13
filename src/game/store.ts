@@ -3,25 +3,33 @@ import {
   BUILDINGS,
   NPCS,
   COTTAGE_INCOME_BONUS,
+  FORTUNES,
   GARDEN_INCOME_BONUS,
+  LOAN_TIERS,
   MAX_BUILDING_LEVEL,
+  MERCHANT_POS,
   PROVISIONS,
   QUESTS,
   QUEST_BY_ID,
   RESOURCE_LABEL,
+  SPECULATOR_POS,
   UPGRADE_COST_MULT,
   xpForLevel,
 } from './data';
 import { generatePlots, generateResourceNodes } from './world';
-import { CALLING_BY_ID, DEFAULT_APPEARANCE } from './customization';
+import { CALLING_BY_ID, DEFAULT_APPEARANCE, randomName } from './customization';
 import { deriveResidents, employmentStats } from './residents';
 import type {
   BuildingId,
   DialogueState,
+  FortuneState,
   GameEvent,
   HarvestPop,
   InteractTarget,
+  LoanState,
   MarketResource,
+  MerchantDeal,
+  MerchantState,
   PanelId,
   PlayerAppearance,
   Plot,
@@ -29,6 +37,7 @@ import type {
   QuestStatus,
   ResourceNode,
   ResourceType,
+  SpeculatorOffer,
   Toast,
   WelcomeBack,
 } from './types';
@@ -80,6 +89,31 @@ const CRIT_MAX = 0.5;
 const CRIT_MULT = 2;
 const COMBO_WINDOW = 3; // seconds before an idle combo decays
 const COMBO_MAX = 12;
+
+// traveling merchant
+const MERCHANT_FIRST_GAP = 95;
+const MERCHANT_MIN_GAP = 150;
+const MERCHANT_MAX_GAP = 240;
+const MERCHANT_WINDOW = 75; // seconds the stall stays open
+const MERCHANT_INSPECTS = 1; // free inspections per visit
+
+// speculator buyout offers
+const SPECULATOR_FIRST_GAP = 200;
+const SPECULATOR_MIN_GAP = 190;
+const SPECULATOR_MAX_GAP = 330;
+const SPECULATOR_WINDOW = 60;
+const SPECULATOR_VALUE_MULT = 26; // BSWX per (income × level)
+const SPECULATOR_BASE = 60;
+
+// town-wide fortunes
+const FORTUNE_FIRST_GAP = 150;
+const FORTUNE_MIN_GAP = 160;
+const FORTUNE_MAX_GAP = 280;
+const FORTUNE_MIN_DUR = 40;
+const FORTUNE_MAX_DUR = 70;
+
+// loan shark
+const LOAN_OVERDUE_GROWTH = 1.12; // debt grows this much each overdue day
 
 export type GamePhase = 'menu' | 'create' | 'playing';
 
@@ -151,6 +185,15 @@ interface GameState {
   harvestPop: HarvestPop | null;
   combo: number;
 
+  // strangers in town & town-wide fortunes
+  merchant: MerchantState | null;
+  nextMerchantIn: number;
+  loan: LoanState | null;
+  speculatorOffer: SpeculatorOffer | null;
+  nextSpeculatorIn: number;
+  fortune: FortuneState | null;
+  nextFortuneIn: number;
+
   // interaction / ui
   panel: PanelId;
   dialogue: DialogueState | null;
@@ -192,6 +235,12 @@ interface GameState {
   buyProvision: (id: string) => void;
   collectEvent: () => void;
   collectWelcomeBack: () => void;
+  inspectDeal: (dealId: number) => void;
+  buyDeal: (dealId: number) => void;
+  takeLoan: (tierIndex: number) => void;
+  repayLoan: (amount: number) => void;
+  acceptBuyout: () => void;
+  declineBuyout: () => void;
   unstuck: () => void;
   completeTeleport: () => void;
   save: () => void;
@@ -250,6 +299,7 @@ export const useGame = create<GameState>((set, get) => {
   let comboTimer = 0;
   let eventId = 1;
   let popId = 1;
+  let dealId = 1;
 
   // ---- quest helpers (operate on draft-ish copies) ----
 
@@ -369,6 +419,13 @@ export const useGame = create<GameState>((set, get) => {
     welcomeBack: null,
     harvestPop: null,
     combo: 0,
+    merchant: null,
+    nextMerchantIn: MERCHANT_FIRST_GAP,
+    loan: null,
+    speculatorOffer: null,
+    nextSpeculatorIn: SPECULATOR_FIRST_GAP,
+    fortune: null,
+    nextFortuneIn: FORTUNE_FIRST_GAP,
     panel: null,
     dialogue: null,
     interactTarget: null,
@@ -395,6 +452,12 @@ export const useGame = create<GameState>((set, get) => {
             nextEventIn: EVENT_FIRST_GAP,
             harvestPop: null,
             combo: 0,
+            merchant: null,
+            nextMerchantIn: MERCHANT_FIRST_GAP,
+            speculatorOffer: null,
+            nextSpeculatorIn: SPECULATOR_FIRST_GAP,
+            fortune: null,
+            nextFortuneIn: FORTUNE_FIRST_GAP,
           });
           economyTimer = 0;
           comboTimer = 0;
@@ -430,6 +493,13 @@ export const useGame = create<GameState>((set, get) => {
         welcomeBack: null,
         harvestPop: null,
         combo: 0,
+        merchant: null,
+        nextMerchantIn: MERCHANT_FIRST_GAP,
+        loan: null,
+        speculatorOffer: null,
+        nextSpeculatorIn: SPECULATOR_FIRST_GAP,
+        fortune: null,
+        nextFortuneIn: FORTUNE_FIRST_GAP,
         toasts: [],
       });
       const first = appearance.name.split(' ')[0];
@@ -496,9 +566,11 @@ export const useGame = create<GameState>((set, get) => {
       // time of day
       let timeOfDay = state.timeOfDay + dt / DAY_LENGTH;
       let day = state.day;
+      let dayRolled = false;
       if (timeOfDay >= 1) {
         timeOfDay -= 1;
         day += 1;
+        dayRolled = true;
         get().addToast(`Day ${day} dawns over New Greenwood.`, 'info');
       }
 
@@ -541,6 +613,7 @@ export const useGame = create<GameState>((set, get) => {
       }
 
       set({ timeOfDay, day, stamina, nodes, nodesVersion, plots });
+      if (dayRolled) processLoanDay(day);
 
       for (const p of finishing) {
         const cfg = BUILDINGS[p.building!];
@@ -588,9 +661,10 @@ export const useGame = create<GameState>((set, get) => {
 
         const residents = deriveResidents(s.plots);
         const { population, employed, employedRatio } = employmentStats(residents);
+        const fortune = s.fortune;
 
-        // 1) gardens grow food
-        let food = Math.min(FOOD_CAP, s.food + levelOf('garden'));
+        // 1) gardens grow food (a blight stops them cold)
+        let food = Math.min(FOOD_CAP, s.food + (fortune?.foodOff ? 0 : levelOf('garden')));
 
         // 2) families eat — a fed town prospers, a hungry one falters
         const need = population * FOOD_PER_RESIDENT;
@@ -635,7 +709,7 @@ export const useGame = create<GameState>((set, get) => {
           income += BUILDINGS[p.building].income * p.level;
         }
         income += foodSold * FOOD_PRICE + goodsSold * GOODS_PRICE;
-        income = Math.round(income * mult);
+        income = Math.round(income * mult * (fortune?.incomeMult ?? 1));
 
         // market prices drift like a real exchange
         const drift = (v: number, lo: number, hi: number) =>
@@ -657,6 +731,10 @@ export const useGame = create<GameState>((set, get) => {
           earn(income);
           audio.sfx('coin');
         }
+        if (fortune?.repPerTick) {
+          set({ reputation: get().reputation + fortune.repPerTick });
+          checkReputationObjectives();
+        }
       }
 
       // ------------------------------------------------------------------
@@ -674,6 +752,56 @@ export const useGame = create<GameState>((set, get) => {
         const nextEventIn = state.nextEventIn - dt;
         if (nextEventIn <= 0) spawnEvent();
         else set({ nextEventIn });
+      }
+
+      // ------------------------------------------------------------------
+      // strangers in town — the traveling merchant & the speculator
+      // ------------------------------------------------------------------
+      if (state.merchant) {
+        const timeLeft = state.merchant.timeLeft - dt;
+        if (timeLeft <= 0) {
+          set({ merchant: null, nextMerchantIn: rand(MERCHANT_MIN_GAP, MERCHANT_MAX_GAP) });
+          if (get().panel === 'merchant') set({ panel: null });
+          get().addToast('The traveling merchant packs up and moves on.', 'info', '🧳');
+        } else {
+          set({ merchant: { ...state.merchant, timeLeft } });
+        }
+      } else {
+        const nextMerchantIn = state.nextMerchantIn - dt;
+        if (nextMerchantIn <= 0) spawnMerchant();
+        else set({ nextMerchantIn });
+      }
+
+      if (state.speculatorOffer) {
+        const timeLeft = state.speculatorOffer.timeLeft - dt;
+        if (timeLeft <= 0) {
+          set({ speculatorOffer: null, nextSpeculatorIn: rand(SPECULATOR_MIN_GAP, SPECULATOR_MAX_GAP) });
+          if (get().panel === 'speculator') set({ panel: null });
+          get().addToast('The speculator withdraws his offer — for now.', 'info', '🎩');
+        } else {
+          set({ speculatorOffer: { ...state.speculatorOffer, timeLeft } });
+        }
+      } else {
+        const nextSpeculatorIn = state.nextSpeculatorIn - dt;
+        if (nextSpeculatorIn <= 0) spawnSpeculatorOffer();
+        else set({ nextSpeculatorIn });
+      }
+
+      // ------------------------------------------------------------------
+      // town-wide fortunes — festivals, booms, panics, blights
+      // ------------------------------------------------------------------
+      if (state.fortune) {
+        const timeLeft = state.fortune.timeLeft - dt;
+        if (timeLeft <= 0) {
+          set({ fortune: null, nextFortuneIn: rand(FORTUNE_MIN_GAP, FORTUNE_MAX_GAP) });
+          get().addToast(`${state.fortune.label} has passed.`, 'info', state.fortune.icon);
+        } else {
+          set({ fortune: { ...state.fortune, timeLeft } });
+        }
+      } else {
+        const nextFortuneIn = state.nextFortuneIn - dt;
+        if (nextFortuneIn <= 0) rollFortune();
+        else set({ nextFortuneIn });
       }
 
       // harvest combo decays when you stop swinging
@@ -771,6 +899,15 @@ export const useGame = create<GameState>((set, get) => {
         set({ selectedPlot: t.id, panel: 'build' });
       } else if (t.kind === 'event') {
         get().collectEvent();
+      } else if (t.kind === 'merchant') {
+        audio.sfx('ui');
+        set({ panel: 'merchant' });
+      } else if (t.kind === 'lender') {
+        audio.sfx('ui');
+        set({ panel: 'loan' });
+      } else if (t.kind === 'speculator') {
+        audio.sfx('ui');
+        set({ panel: 'speculator' });
       }
     },
 
@@ -1002,6 +1139,142 @@ export const useGame = create<GameState>((set, get) => {
       }
     },
 
+    // ---- traveling merchant ----
+    inspectDeal: (dealId) => {
+      const m = get().merchant;
+      if (!m || m.inspectsLeft <= 0) return;
+      const deals = m.deals.map((d) => (d.id === dealId ? { ...d, mystery: false } : d));
+      set({ merchant: { ...m, deals, inspectsLeft: m.inspectsLeft - 1 } });
+      audio.sfx('ui');
+    },
+
+    buyDeal: (dealId) => {
+      const s = get();
+      const m = s.merchant;
+      if (!m) return;
+      const deal = m.deals.find((d) => d.id === dealId);
+      if (!deal || deal.sold) return;
+      if (s.bswx < deal.cost) {
+        get().addToast('Not enough BSWX for that.', 'warn', '!');
+        audio.sfx('error');
+        return;
+      }
+      const r = deal.reward;
+      const patch: Partial<GameState> = {
+        bswx: s.bswx - deal.cost + (r.bswx ?? 0),
+        wood: s.wood + (r.wood ?? 0),
+        stone: s.stone + (r.stone ?? 0),
+        clay: s.clay + (r.clay ?? 0),
+        goods: s.goods + (r.goods ?? 0),
+      };
+      if (r.stamina) patch.stamina = Math.min(s.staminaMax, s.stamina + r.stamina);
+      const trust = Math.max(
+        -3,
+        Math.min(3, m.trust + (deal.quality === 'ripoff' ? -1 : deal.quality === 'steal' ? 1 : 0))
+      );
+      const deals = m.deals.map((d) => (d.id === dealId ? { ...d, sold: true, mystery: false } : d));
+      patch.merchant = { ...m, deals, trust };
+      set(patch as never);
+      (['wood', 'stone', 'clay'] as const).forEach((k) => {
+        if (r[k]) applyQuestEvent('gather', k, r[k]!);
+      });
+      audio.sfx(deal.quality === 'ripoff' ? 'error' : 'coin');
+      const msg =
+        deal.quality === 'ripoff'
+          ? 'Snake oil! That crate was all straw and lies.'
+          : deal.quality === 'steal'
+            ? `A steal! You got ${deal.label}.`
+            : `Fair trade: ${deal.label}.`;
+      get().addToast(msg, deal.quality === 'ripoff' ? 'warn' : 'reward', deal.quality === 'ripoff' ? '🐍' : '🛒');
+    },
+
+    // ---- loan shark ----
+    takeLoan: (tierIndex) => {
+      const s = get();
+      if (s.loan) {
+        get().addToast('Settle your current debt before borrowing more.', 'warn', '!');
+        return;
+      }
+      const tier = LOAN_TIERS[tierIndex];
+      if (!tier) return;
+      const owed = Math.round(tier.principal * (1 + tier.rate));
+      set({
+        bswx: s.bswx + tier.principal,
+        loan: { principal: tier.principal, owed, dueDay: s.day + tier.days, overdue: false },
+        panel: null,
+      });
+      audio.sfx('coin');
+      get().addToast(`Borrowed ◆${tier.principal}. You owe ◆${owed} by day ${s.day + tier.days}.`, 'warn', '🪙');
+      get().save();
+    },
+
+    repayLoan: (amount) => {
+      const s = get();
+      const loan = s.loan;
+      if (!loan) return;
+      const pay = Math.min(amount, loan.owed, Math.floor(s.bswx));
+      if (pay <= 0) {
+        get().addToast('Not enough BSWX to repay that.', 'warn', '!');
+        audio.sfx('error');
+        return;
+      }
+      const owed = loan.owed - pay;
+      audio.sfx('coin');
+      if (owed <= 0) {
+        set({ bswx: s.bswx - pay, loan: null, reputation: s.reputation + 4 });
+        get().addToast('Debt cleared — and you kept your good name. (+4 rep)', 'reward', '✓');
+        checkReputationObjectives();
+      } else {
+        set({ bswx: s.bswx - pay, loan: { ...loan, owed } });
+        get().addToast(`Repaid ◆${pay}. ◆${owed} still owed.`, 'info', '🪙');
+      }
+      get().save();
+    },
+
+    // ---- speculator buyout ----
+    acceptBuyout: () => {
+      const s = get();
+      const offer = s.speculatorOffer;
+      if (!offer) return;
+      const plot = s.plots.find((p) => p.id === offer.plotId);
+      if (!plot?.building) {
+        set({ speculatorOffer: null, panel: null });
+        return;
+      }
+      const plots = s.plots.map((p) =>
+        p.id === offer.plotId ? { ...p, building: null, level: 0, construction: 0 } : p
+      );
+      set({
+        plots,
+        bswx: s.bswx + offer.amount,
+        totalEarned: s.totalEarned + offer.amount,
+        reputation: Math.max(0, s.reputation - 8),
+        speculatorOffer: null,
+        nextSpeculatorIn: rand(SPECULATOR_MIN_GAP, SPECULATOR_MAX_GAP),
+        panel: null,
+      });
+      audio.sfx('coin');
+      get().addToast(`You sold the ${offer.buildingName} for ◆${offer.amount}. The block feels emptier. (−8 rep)`, 'warn', '🎩');
+      get().save();
+    },
+
+    declineBuyout: () => {
+      const s = get();
+      if (!s.speculatorOffer) {
+        set({ panel: null });
+        return;
+      }
+      set({
+        speculatorOffer: null,
+        nextSpeculatorIn: rand(SPECULATOR_MIN_GAP, SPECULATOR_MAX_GAP),
+        reputation: s.reputation + 3,
+        panel: null,
+      });
+      audio.sfx('questAccept');
+      get().addToast("You hold your ground. Greenwood stays in Greenwood's hands. (+3 rep)", 'reward', '✊');
+      checkReputationObjectives();
+    },
+
     save: () => {
       try {
         const s = get();
@@ -1017,6 +1290,7 @@ export const useGame = create<GameState>((set, get) => {
           quests: s.quests, trackedQuest: s.trackedQuest,
           plots: s.plots,
           nodes: s.nodes.map((n) => ({ id: n.id, hp: n.hp, regrow: Math.round(n.regrow) })),
+          loan: s.loan,
           lastSeen: Date.now(),
         };
         localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -1121,6 +1395,121 @@ export const useGame = create<GameState>((set, get) => {
       set({ nextEventIn: 20 });
     }
   }
+
+  /** Build one merchant crate of a given quality, scaled to player level. */
+  function makeDeal(quality: 'steal' | 'fair' | 'ripoff', lvl: number): MerchantDeal {
+    const id = dealId++;
+    const base = 20 + lvl * 6;
+    const cost = Math.round(base * (0.8 + Math.random() * 0.6));
+    const res = (['wood', 'stone', 'clay'] as const)[Math.floor(Math.random() * 3)];
+    const fairUnits = Math.max(1, Math.round(cost / 2.5));
+    const amt =
+      quality === 'steal'
+        ? Math.round(fairUnits * 2.2)
+        : quality === 'fair'
+          ? fairUnits
+          : Math.max(1, Math.round(fairUnits * 0.18));
+    return {
+      id,
+      cost,
+      reward: { [res]: amt },
+      quality,
+      label: `${amt} ${RESOURCE_LABEL[res]}`,
+      mystery: true,
+      sold: false,
+    };
+  }
+
+  /** Traveling merchant rolls into town with three face-down crates: one steal,
+   *  one fair, one snake-oil — but you don't know which is which. */
+  function spawnMerchant() {
+    const s = get();
+    if (!s.plots.some((p) => p.building && p.construction === 0)) {
+      set({ nextMerchantIn: 30 });
+      return;
+    }
+    const qualities: ('steal' | 'fair' | 'ripoff')[] = ['steal', 'fair', 'ripoff'];
+    for (let i = qualities.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [qualities[i], qualities[j]] = [qualities[j], qualities[i]];
+    }
+    const deals = qualities.map((q) => makeDeal(q, s.level));
+    set({
+      merchant: {
+        name: randomName(),
+        x: MERCHANT_POS.x,
+        z: MERCHANT_POS.z,
+        deals,
+        inspectsLeft: MERCHANT_INSPECTS,
+        trust: 0,
+        timeLeft: MERCHANT_WINDOW,
+        duration: MERCHANT_WINDOW,
+      },
+      nextMerchantIn: rand(MERCHANT_MIN_GAP, MERCHANT_MAX_GAP),
+    });
+    get().addToast('A traveling merchant set up at the plaza — deals for a limited time!', 'quest', '🛒');
+    audio.sfx('questReady');
+  }
+
+  /** Speculator makes a tempting buyout offer on one of your businesses. */
+  function spawnSpeculatorOffer() {
+    const s = get();
+    const targets = s.plots.filter(
+      (p) => p.building && p.construction === 0 && BUILDINGS[p.building].income > 0
+    );
+    if (targets.length === 0) {
+      set({ nextSpeculatorIn: 40 });
+      return;
+    }
+    const p = targets[Math.floor(Math.random() * targets.length)];
+    const cfg = BUILDINGS[p.building!];
+    const amount = Math.round(
+      SPECULATOR_BASE + cfg.income * p.level * SPECULATOR_VALUE_MULT * (0.9 + Math.random() * 0.4)
+    );
+    set({
+      speculatorOffer: {
+        plotId: p.id,
+        buildingName: cfg.name,
+        amount,
+        x: SPECULATOR_POS.x,
+        z: SPECULATOR_POS.z,
+        timeLeft: SPECULATOR_WINDOW,
+        duration: SPECULATOR_WINDOW,
+      },
+      nextSpeculatorIn: rand(SPECULATOR_MIN_GAP, SPECULATOR_MAX_GAP),
+    });
+    get().addToast(`A speculator offers ◆${amount} for your ${cfg.name}. Defend your turf!`, 'warn', '🎩');
+    audio.sfx('questReady');
+  }
+
+  /** Roll a town-wide fortune — a festival, boom, panic, or blight. */
+  function rollFortune() {
+    const s = get();
+    if (!s.plots.some((p) => p.building && p.construction === 0)) {
+      set({ nextFortuneIn: 40 });
+      return;
+    }
+    const tmpl = FORTUNES[Math.floor(Math.random() * FORTUNES.length)];
+    const duration = Math.round(rand(FORTUNE_MIN_DUR, FORTUNE_MAX_DUR));
+    set({
+      fortune: { ...tmpl, timeLeft: duration, duration },
+      nextFortuneIn: rand(FORTUNE_MIN_GAP, FORTUNE_MAX_GAP),
+    });
+    get().addToast(`${tmpl.label}! ${tmpl.desc}`, tmpl.good ? 'reward' : 'warn', tmpl.icon);
+    audio.sfx(tmpl.good ? 'complete' : 'error');
+  }
+
+  /** Grow an overdue loan and ding reputation at each day rollover. */
+  function processLoanDay(newDay: number) {
+    const s = get();
+    const loan = s.loan;
+    if (!loan) return;
+    if (newDay > loan.dueDay) {
+      const owed = Math.round(loan.owed * LOAN_OVERDUE_GROWTH);
+      set({ loan: { ...loan, owed, overdue: true }, reputation: Math.max(0, s.reputation - 2) });
+      get().addToast(`Overdue! The shark's debt swells to ◆${owed}. (−2 rep)`, 'warn', '⚠');
+    }
+  }
 });
 
 // debug handle (harmless in prod, invaluable when investigating live issues)
@@ -1201,6 +1590,7 @@ function loadSave(): Partial<GameState> | null {
       nodes,
       nodesVersion: 1,
       welcomeBack,
+      loan: data.loan ?? null,
     };
   } catch {
     return null;

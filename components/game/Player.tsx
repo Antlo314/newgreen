@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { WalkRef } from './Humanoid';
 import SkinnedCharacter from './SkinnedCharacter';
 import { useGame } from '../../src/game/store';
-import { BUILDINGS, NPCS, QUESTS, RESOURCE_LABEL } from '../../src/game/data';
+import { BUILDINGS, LENDER_POS, NPCS, QUESTS, RESOURCE_LABEL } from '../../src/game/data';
 
 const QUEST_GIVER: Record<string, string> = Object.fromEntries(
   QUESTS.map((q) => [q.id, q.giver])
@@ -325,6 +325,22 @@ function updateInteractTarget(x: number, z: number, s: GS) {
       }
     } else if (plotsUnlocked && d < bestD) {
       best = { kind: 'plot', id: p.id, label: 'Open Plot', verb: 'Build', x: p.x, z: p.z };
+      bestD = d;
+    }
+  }
+
+  // strangers in town — the loan shark (always), merchant & speculator (when present)
+  const strangers: InteractTarget[] = [
+    { kind: 'lender', id: 'lender', label: 'the Loan Shark', verb: 'Talk', x: LENDER_POS.x, z: LENDER_POS.z },
+  ];
+  if (s.merchant)
+    strangers.push({ kind: 'merchant', id: 'merchant', label: `${s.merchant.name} — Traveling Merchant`, verb: 'Trade', x: s.merchant.x, z: s.merchant.z });
+  if (s.speculatorOffer)
+    strangers.push({ kind: 'speculator', id: 'speculator', label: 'the Speculator', verb: 'Hear offer', x: s.speculatorOffer.x, z: s.speculatorOffer.z });
+  for (const a of strangers) {
+    const d = (x - a.x) ** 2 + (z - a.z) ** 2;
+    if (d < bestD) {
+      best = a;
       bestD = d;
     }
   }
