@@ -67,6 +67,23 @@ export default function MainMenu() {
           >
             ✦ New Legacy
           </button>
+
+          <div className="my-1 flex items-center gap-3 text-[9px] uppercase tracking-[0.3em] text-white/25">
+            <span className="h-px flex-1 bg-white/15" />
+            also playable
+            <span className="h-px flex-1 bg-white/15" />
+          </div>
+
+          <a
+            href="/adventure"
+            onClick={() => audio.unlock()}
+            className="group relative overflow-hidden rounded-xl border border-orange-400/50 bg-gradient-to-r from-orange-500/20 to-amber-500/15 px-6 py-3.5 text-sm font-bold tracking-wide text-orange-100 shadow-lg transition hover:scale-[1.02] hover:from-orange-500/30 hover:to-amber-500/25 active:scale-100"
+          >
+            <span className="relative z-10">🏮 Play “Emberwilds”</span>
+            <span className="relative z-10 ml-1 block text-[10px] font-normal tracking-normal text-orange-200/70">
+              a 2D pixel adventure · build your own hero
+            </span>
+          </a>
         </div>
 
         <div className="mt-8 grid grid-cols-3 gap-x-6 gap-y-1 text-[10px] text-white/45">
