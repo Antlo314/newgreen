@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useGame } from '../../../src/game/store';
 import { adjacencyInfo, goalAt, QUEST_BY_ID, xpForLevel } from '../../../src/game/data';
 import { deriveResidents } from '../../../src/game/residents';
+import { clearTouchMove, setTouchMove, setTouchSprint } from '../../../src/game/touchControls';
 import Minimap from './Minimap';
 
 export default function HUD() {
@@ -52,7 +53,7 @@ function FounderArrival() {
 function StatPill({ icon, value, label, color }: { icon: string; value: string; label: string; color: string }) {
   return (
     <div
-      className="flex items-center gap-1.5 rounded-full border border-white/10 bg-black/55 px-2.5 py-1 backdrop-blur-sm"
+      className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-black/55 px-2.5 py-1 backdrop-blur-sm"
       title={label}
     >
       <span style={{ color }} className="text-sm leading-none">{icon}</span>
@@ -93,7 +94,8 @@ function TopBar() {
   const xpNeed = xpForLevel(level);
 
   return (
-    <div className="pointer-events-auto absolute left-0 right-0 top-0 flex flex-wrap items-center gap-1.5 p-2 sm:gap-2 sm:p-3">
+    <div className="safe-pt pointer-events-auto absolute left-0 right-0 top-0 flex flex-nowrap items-start gap-1.5 p-2 sm:gap-2 sm:p-3">
+      <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto sm:flex-wrap sm:gap-2">
       <StatPill icon="◆" value={bswx.toLocaleString()} label="BSWX — Black Wall Street Exchange" color="#ffd54f" />
       <StatPill icon="🪵" value={String(wood)} label="Lumber" color="#a87b4f" />
       <StatPill icon="🪨" value={String(stone)} label="Stone" color="#aeb6bf" />
@@ -123,8 +125,9 @@ function TopBar() {
           color="#f0b429"
         />
       )}
+      </div>
 
-      <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
         <div className="flex flex-col gap-1 rounded-lg border border-white/10 bg-black/55 px-2.5 py-1.5 backdrop-blur-sm">
           <div className="max-w-[140px] truncate text-[10px] font-bold text-amber-100/90">{name}</div>
           <div className="flex items-center gap-2">
@@ -310,7 +313,7 @@ function HotkeyBar() {
   ];
 
   return (
-    <div className="pointer-events-auto absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5 sm:bottom-3 sm:gap-2">
+    <div className="pointer-events-auto absolute bottom-2 left-1/2 hidden -translate-x-1/2 gap-1.5 sm:bottom-3 sm:flex sm:gap-2">
       {items.map((it) => (
         <button
           key={it.key}
@@ -333,37 +336,364 @@ function HotkeyBar() {
 }
 
 // ---------------------------------------------------------------------------
-// Mobile: virtual joystick (left) + interact button (right)
+// Mobile control suite — virtual joystick, contextual action button, sprint,
+// zoom (buttons + pinch), a panel launcher, and an optional live minimap.
+// The whole layer is CSS-gated to phones (`sm:hidden`), so on desktop the
+// elements stay in the DOM but display:none — their pointer handlers never
+// fire and ground taps keep flowing through to click-to-move.
 // ---------------------------------------------------------------------------
 
-function MobileControls() {
-  const target = useGame((s) => s.interactTarget);
-  const interact = useGame((s) => s.interact);
+const VERB_ICON: Record<string, string> = {
+  Talk: '💬',
+  Collect: '⚡',
+  Read: '📋',
+  Trade: '🛒',
+  Build: '⚒️',
+  Manage: '⚒️',
+  Chop: '🪓',
+  Mine: '⛏️',
+  Dig: '🥄',
+};
 
+function MobileControls() {
+  const placing = useGame((s) => s.placing);
+  // While aiming a building, PlacementButtons own the bottom-right — hide the
+  // action/sprint cluster so they don't stack on top of each other.
   return (
     <div className="sm:hidden">
-      {target && (
-        <button
-          onPointerDown={(e) => {
-            e.preventDefault();
-            interact();
-          }}
-          className="pointer-events-auto absolute bottom-16 right-4 flex h-16 w-16 items-center justify-center rounded-full border-2 border-amber-400/60 bg-black/60 text-xl font-bold text-amber-300 backdrop-blur-sm active:scale-95"
-        >
-          {target.verb === 'Talk'
-            ? '💬'
-            : target.verb === 'Collect'
-              ? '⚡'
-              : target.verb === 'Read'
-                ? '📋'
-                : target.verb === 'Trade'
-                  ? '🛒'
-                  : target.verb === 'Build' || target.verb === 'Manage'
-                    ? '⚒️'
-                    : '✊'}
-        </button>
+      {/* during placement the lower-left must stay tappable for "tap to place" */}
+      {!placing && <Joystick />}
+      {!placing && <ActionButton />}
+      {!placing && <SprintButton />}
+      <ZoomCluster />
+      <MobileMenu />
+    </div>
+  );
+}
+
+// --- Virtual joystick -------------------------------------------------------
+// Dynamic-origin stick living in the lower-left zone: wherever the thumb lands
+// becomes the centre, and the knob tracks within a fixed radius. Tilt distance
+// drives analog speed (with a small dead-zone) via the touchControls singleton.
+
+const JOY_RADIUS = 58;
+const JOY_DEAD = 0.18;
+
+function Joystick() {
+  // origin lives in a ref so the FIRST pointermove (which can fire before a
+  // setState flush) already has it; `base` mirrors it only for rendering.
+  const originRef = useRef<{ x: number; y: number } | null>(null);
+  const [base, setBase] = useState<{ x: number; y: number } | null>(null);
+  const [knob, setKnob] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const pid = useRef<number | null>(null);
+
+  const end = () => {
+    pid.current = null;
+    originRef.current = null;
+    setBase(null);
+    setKnob({ x: 0, y: 0 });
+    clearTouchMove();
+  };
+
+  // never leave the player drifting if the stick unmounts mid-drag
+  useEffect(() => () => clearTouchMove(), []);
+
+  return (
+    <div
+      className="pointer-events-auto absolute bottom-0 left-0 h-[58%] w-[46%] touch-none"
+      onPointerDown={(e) => {
+        if (pid.current !== null) return;
+        pid.current = e.pointerId;
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        } catch {
+          /* ignore — capture is a nicety, not required */
+        }
+        originRef.current = { x: e.clientX, y: e.clientY };
+        setBase(originRef.current);
+        setKnob({ x: 0, y: 0 });
+      }}
+      onPointerMove={(e) => {
+        const o = originRef.current;
+        if (e.pointerId !== pid.current || !o) return;
+        let dx = e.clientX - o.x;
+        let dy = e.clientY - o.y;
+        const dist = Math.hypot(dx, dy);
+        const clamped = Math.min(dist, JOY_RADIUS);
+        if (dist > 0) {
+          dx = (dx / dist) * clamped;
+          dy = (dy / dist) * clamped;
+        }
+        setKnob({ x: dx, y: dy });
+        const raw = clamped / JOY_RADIUS;
+        const mag = raw < JOY_DEAD ? 0 : (raw - JOY_DEAD) / (1 - JOY_DEAD);
+        // dx → +X (right), dy → +Z (down). Player normalizes (x,z).
+        setTouchMove(dx, dy, mag);
+      }}
+      onPointerUp={end}
+      onPointerCancel={end}
+    >
+      {/* resting hint when idle so the stick is discoverable */}
+      {!base && (
+        <div className="absolute bottom-4 left-5 h-20 w-20 rounded-full border border-white/15 bg-white/[0.04]">
+          <div className="absolute left-1/2 top-1/2 h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/25 bg-white/10" />
+          <div className="absolute left-1/2 top-1 -translate-x-1/2 text-[8px] font-bold uppercase tracking-wider text-white/35">
+            Move
+          </div>
+        </div>
+      )}
+      {base && (
+        <div className="pointer-events-none fixed z-20" style={{ left: base.x, top: base.y }}>
+          <div
+            className="absolute h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-amber-300/30 bg-black/30 backdrop-blur-[1px]"
+          />
+          <div
+            className="absolute h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-amber-300/70 bg-amber-300/25 shadow-[0_0_20px_rgba(255,213,79,0.4)]"
+            style={{ transform: `translate(calc(-50% + ${knob.x}px), calc(-50% + ${knob.y}px))` }}
+          />
+        </div>
       )}
     </div>
+  );
+}
+
+// --- Action button ----------------------------------------------------------
+// Always present in the right thumb zone so it's a consistent target; lights
+// up and pulses when something interactable is in range.
+
+function ActionButton() {
+  const target = useGame((s) => s.interactTarget);
+  const harvesting = useGame((s) => s.harvesting !== null);
+  const interact = useGame((s) => s.interact);
+  const live = !!target || harvesting;
+  const icon = harvesting ? '✊' : target ? VERB_ICON[target.verb] ?? '✊' : '✊';
+
+  return (
+    <button
+      onPointerDown={(e) => {
+        e.preventDefault();
+        if (live) interact();
+      }}
+      aria-label={target ? `${target.verb} ${target.label}` : 'Act'}
+      style={{ bottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
+      className={`pointer-events-auto absolute right-5 flex h-[4.75rem] w-[4.75rem] flex-col items-center justify-center rounded-full border-2 backdrop-blur-sm transition active:scale-90 ${
+        live
+          ? 'animate-eventPulse border-amber-400/70 bg-black/65 text-amber-200'
+          : 'border-white/15 bg-black/40 text-white/30'
+      }`}
+    >
+      <span className="text-2xl leading-none">{icon}</span>
+      {target && <span className="mt-0.5 max-w-[4rem] truncate text-[9px] font-bold uppercase tracking-wide">{target.verb}</span>}
+    </button>
+  );
+}
+
+// --- Sprint toggle ----------------------------------------------------------
+
+function SprintButton() {
+  const [on, setOn] = useState(false);
+  const stamina = useGame((s) => s.stamina);
+  const winded = stamina <= 0;
+  const toggle = () => {
+    const next = !on;
+    setOn(next);
+    setTouchSprint(next);
+  };
+  // drop the sprint flag if the component ever unmounts (e.g. enter placement)
+  useEffect(() => () => setTouchSprint(false), []);
+  return (
+    <button
+      onPointerDown={(e) => {
+        e.preventDefault();
+        toggle();
+      }}
+      aria-pressed={on}
+      aria-label="Toggle sprint"
+      className={`pointer-events-auto absolute bottom-[12.5rem] left-5 flex h-14 w-14 flex-col items-center justify-center rounded-full border-2 backdrop-blur-sm transition active:scale-90 ${
+        on && !winded
+          ? 'border-emerald-400/70 bg-emerald-500/25 text-emerald-100'
+          : 'border-white/15 bg-black/45 text-white/55'
+      }`}
+    >
+      <span className="text-lg leading-none">💨</span>
+      <span className="text-[8px] font-bold uppercase tracking-wide">{winded ? 'Tired' : on ? 'On' : 'Run'}</span>
+    </button>
+  );
+}
+
+// --- Zoom: buttons on the left edge + two-finger pinch ----------------------
+
+function ZoomCluster() {
+  // pinch-to-zoom (two fingers anywhere on screen)
+  useEffect(() => {
+    let startDist = 0;
+    let startZoom = 1;
+    const dist = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        startDist = dist(e.touches);
+        startZoom = useGame.getState().cameraZoom;
+      }
+    };
+    const onMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && startDist > 0) {
+        e.preventDefault();
+        const ratio = dist(e.touches) / startDist;
+        // spreading fingers (ratio > 1) zooms IN → smaller cameraZoom
+        useGame.getState().setCameraZoom(startZoom / ratio);
+      }
+    };
+    const onEnd = () => {
+      startDist = 0;
+    };
+    window.addEventListener('touchstart', onStart, { passive: true });
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onEnd);
+    window.addEventListener('touchcancel', onEnd);
+    return () => {
+      window.removeEventListener('touchstart', onStart);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+      window.removeEventListener('touchcancel', onEnd);
+    };
+  }, []);
+
+  const nudge = (d: number) => {
+    const s = useGame.getState();
+    s.setCameraZoom(s.cameraZoom + d);
+  };
+  return (
+    <div className="pointer-events-auto absolute left-3 top-1/2 flex -translate-y-1/2 flex-col overflow-hidden rounded-full border border-white/15 bg-black/45 backdrop-blur-sm">
+      <button
+        onPointerDown={(e) => {
+          e.preventDefault();
+          nudge(-0.14);
+        }}
+        aria-label="Zoom in"
+        className="flex h-11 w-11 items-center justify-center text-xl font-bold text-white/80 transition active:bg-white/15"
+      >
+        +
+      </button>
+      <div className="mx-2 h-px bg-white/15" />
+      <button
+        onPointerDown={(e) => {
+          e.preventDefault();
+          nudge(0.14);
+        }}
+        aria-label="Zoom out"
+        className="flex h-11 w-11 items-center justify-center text-xl font-bold text-white/80 transition active:bg-white/15"
+      >
+        −
+      </button>
+    </div>
+  );
+}
+
+// --- Panel launcher (replaces the desktop hotkey bar on phones) -------------
+
+function MobileMenu() {
+  const [open, setOpen] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  const setPanel = useGame((s) => s.setPanel);
+  const backToMenu = useGame((s) => s.backToMenu);
+  const quests = useGame((s) => s.quests);
+  const skillPoints = useGame((s) => s.skillPoints);
+  const hasReady = Object.values(quests).some((q) => q.status === 'ready');
+
+  const items: { icon: string; label: string; panel: 'build' | 'quests' | 'inventory' | 'market' | 'map' | 'help'; badge?: boolean }[] = [
+    { icon: '⚒️', label: 'Build', panel: 'build' },
+    { icon: '📜', label: 'Quests', panel: 'quests', badge: hasReady },
+    { icon: '🎒', label: 'Inventory', panel: 'inventory', badge: skillPoints > 0 },
+    { icon: '🛒', label: 'Market', panel: 'market' },
+    { icon: '🗺️', label: 'Map', panel: 'map' },
+    { icon: '❓', label: 'Help', panel: 'help' },
+  ];
+
+  return (
+    <>
+      {/* launcher + minimap toggle — stacked in the upper-right, below the topbar */}
+      <button
+        onPointerDown={(e) => {
+          e.preventDefault();
+          setOpen(true);
+        }}
+        aria-label="Open menu"
+        className="pointer-events-auto absolute right-3 top-16 flex h-12 w-12 items-center justify-center rounded-xl border-2 border-white/15 bg-black/55 text-white/85 backdrop-blur-sm transition active:scale-90"
+      >
+        <span className="text-xl leading-none">☰</span>
+        {(hasReady || skillPoints > 0) && <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-amber-400" />}
+      </button>
+      <button
+        onPointerDown={(e) => {
+          e.preventDefault();
+          setShowMap((v) => !v);
+        }}
+        aria-label="Toggle minimap"
+        className={`pointer-events-auto absolute right-3 top-[7.25rem] flex h-12 w-12 items-center justify-center rounded-xl border-2 text-lg backdrop-blur-sm transition active:scale-90 ${
+          showMap ? 'border-amber-400/60 bg-amber-400/15 text-amber-200' : 'border-white/15 bg-black/45 text-white/70'
+        }`}
+      >
+        🧭
+      </button>
+      {showMap && (
+        <div className="pointer-events-none absolute right-3 top-[11.5rem]">
+          <Minimap size={132} />
+        </div>
+      )}
+
+      {/* full-screen launcher grid */}
+      {open && (
+        <div
+          className="safe-pb pointer-events-auto fixed inset-0 z-40 flex flex-col items-center justify-end bg-black/65 p-5 pb-10 backdrop-blur-sm"
+          onPointerDown={() => setOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl border border-amber-200/20 bg-[#161310]/95 p-4 shadow-2xl"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between px-1">
+              <span className="text-xs font-bold uppercase tracking-widest text-amber-300">Menu</span>
+              <button
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  setOpen(false);
+                }}
+                className="rounded-md px-2 py-0.5 text-white/60"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2.5">
+              {items.map((it) => (
+                <button
+                  key={it.panel}
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    setPanel(it.panel);
+                    setOpen(false);
+                  }}
+                  className="relative flex aspect-square flex-col items-center justify-center gap-1.5 rounded-2xl border border-white/10 bg-white/5 transition active:scale-95 active:bg-white/10"
+                >
+                  <span className="text-2xl">{it.icon}</span>
+                  <span className="text-[11px] font-semibold text-white/85">{it.label}</span>
+                  {it.badge && <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-amber-400" />}
+                </button>
+              ))}
+            </div>
+            <button
+              onPointerDown={(e) => {
+                e.preventDefault();
+                setOpen(false);
+                backToMenu();
+              }}
+              className="mt-3 w-full rounded-2xl border border-white/10 bg-white/5 py-3 text-sm font-semibold text-white/75 transition active:scale-[0.98]"
+            >
+              ⌂ Save &amp; Quit to Menu
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -487,7 +817,7 @@ function GoalTracker() {
   }
   const pct = Math.max(0, Math.min(100, (val / goal.target) * 100));
   return (
-    <div className="pointer-events-none absolute bottom-14 left-1/2 w-[min(90vw,300px)] -translate-x-1/2 sm:bottom-16">
+    <div className="pointer-events-none absolute bottom-28 left-1/2 w-[min(58vw,230px)] -translate-x-1/2 sm:bottom-16 sm:w-[min(90vw,300px)]">
       <div className="rounded-xl border border-amber-300/30 bg-black/65 px-3 py-1.5 backdrop-blur-sm">
         <div className="flex items-center gap-2">
           <span className="text-sm leading-none">🎯</span>

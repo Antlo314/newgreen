@@ -11,6 +11,34 @@ body {
   overscroll-behavior: none;
 }
 
+/* Touch/mobile niceties: no blue tap flash, no long-press callout, no text
+   selection drag on the game chrome, and let the canvas own all gestures. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+/* Horizontal scroll strips (e.g. the mobile resource bar) without a scrollbar. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe-area helpers for notched / home-indicator phones (viewport-fit=cover). */
+.safe-pt {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-pb {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 @keyframes toastIn {
   0% {
     opacity: 0;

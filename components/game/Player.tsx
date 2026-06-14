@@ -21,6 +21,7 @@ import {
   isInRiver,
 } from '../../src/game/world';
 import { audio } from '../../src/game/audio';
+import { touchMove } from '../../src/game/touchControls';
 import type { InteractTarget } from '../../src/game/types';
 
 const SPEED = 5.2;
@@ -129,15 +130,24 @@ export default function Player() {
       if (k['d'] || k['arrowright']) tmpDir.x += 1;
     }
 
+    const keyboardActive = tmpDir.lengthSq() > 0;
+    // mobile virtual joystick (analog) — only when no key is held
+    const touchActive = !keyboardActive && !inputBlocked && touchMove.active;
+
     const baseSpeed = SPEED * (1 + (s.skills.stride ?? 0) * STRIDE_PER_PT) * civicSpeedMult(s.civics);
-    const wantSprint = !inputBlocked && !!keys.current['shift'];
+    const wantSprint = !inputBlocked && (!!keys.current['shift'] || touchMove.sprint);
     let speed = 0;
     let sprinting = false;
-    if (tmpDir.lengthSq() > 0) {
+    if (keyboardActive) {
       // keyboard overrides click-to-move
       if (s.moveTarget) s.setMoveTarget(null);
       tmpDir.normalize();
       speed = baseSpeed;
+    } else if (touchActive) {
+      // joystick overrides click-to-move; tilt magnitude throttles speed
+      if (s.moveTarget) s.setMoveTarget(null);
+      tmpDir.set(touchMove.x, 0, touchMove.z).normalize();
+      speed = baseSpeed * Math.min(1, touchMove.mag);
     } else if (s.moveTarget && !inputBlocked) {
       const dx = s.moveTarget.x - pos.x;
       const dz = s.moveTarget.z - pos.z;

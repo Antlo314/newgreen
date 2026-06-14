@@ -78,7 +78,7 @@ function MenuButton() {
   return (
     <button
       onClick={backToMenu}
-      className="absolute bottom-2 left-2 z-10 rounded-lg border border-white/10 bg-black/55 px-2.5 py-1.5 text-[11px] font-semibold text-white/70 backdrop-blur-sm transition hover:bg-black/75 hover:text-white sm:bottom-3 sm:left-3"
+      className="absolute bottom-2 left-2 z-10 hidden rounded-lg border border-white/10 bg-black/55 px-2.5 py-1.5 text-[11px] font-semibold text-white/70 backdrop-blur-sm transition hover:bg-black/75 hover:text-white sm:block sm:bottom-3 sm:left-3"
       title="Save & return to menu"
     >
       ⌂

@@ -10,9 +10,11 @@ import splashImg from '../../src/assets/images/new_greenwood_splash_177963130181
 export default function MainMenu() {
   const startGame = useGame((s) => s.startGame);
   const [saveExists, setSaveExists] = useState(false);
+  const [touch, setTouch] = useState(false);
 
   useEffect(() => {
     setSaveExists(hasSavedGame());
+    setTouch(window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window);
   }, []);
 
   const begin = (fresh: boolean) => {
@@ -68,13 +70,26 @@ export default function MainMenu() {
         </div>
 
         <div className="mt-8 grid grid-cols-3 gap-x-6 gap-y-1 text-[10px] text-white/45">
-          <span>WASD / click — move</span>
-          <span>Shift — sprint</span>
-          <span>E — interact</span>
-          <span>Q — quests</span>
-          <span>I — inventory</span>
-          <span>M — map</span>
-          <span>H — help</span>
+          {touch ? (
+            <>
+              <span>Joystick — move</span>
+              <span>Tap map — walk to</span>
+              <span>💨 — sprint</span>
+              <span>⚒ button — act</span>
+              <span>Pinch — zoom</span>
+              <span>☰ — menu</span>
+            </>
+          ) : (
+            <>
+              <span>WASD / click — move</span>
+              <span>Shift — sprint</span>
+              <span>E — interact</span>
+              <span>Q — quests</span>
+              <span>I — inventory</span>
+              <span>M — map</span>
+              <span>H — help</span>
+            </>
+          )}
         </div>
 
         <p className="mt-6 max-w-sm text-[10px] leading-relaxed text-white/35">
