@@ -20,6 +20,15 @@ import {
 import { GameMap, Entity, SaveData, SHARD_NAMES, SAVE_VERSION } from './types';
 import { generateWorld } from './world';
 
+export interface ShopItem {
+  id: string;
+  name: string;
+  desc: string;
+  cost: number;
+  level: number;
+  max: number;
+}
+
 export interface EngineSnapshot {
   hp: number;
   maxHp: number;
@@ -32,6 +41,11 @@ export interface EngineSnapshot {
   mapName: string;
   won: boolean;
   dead: boolean;
+  objective: string;
+  stats: { atk: number; dash: boolean; swift: number; lightLvl: number };
+  canDash: boolean;
+  boss: { name: string; hp: number; max: number } | null;
+  shop: ShopItem[] | null;
 }
 
 export interface EngineOpts {
@@ -104,6 +118,21 @@ export class AdventureEngine {
   private openGates = new Set<string>();
   private lit = false;
   private playtime = 0;
+  // upgrades / progression
+  private atk = 1;
+  private dashUnlocked = false;
+  private swift = 0;
+  private lightLvl = 0;
+  private bossDefeated = false;
+  // dash state
+  private dashT = 0;
+  private dashCool = 0;
+  private dashDir = [0, 1];
+  private queuedDash = false;
+  // boss / shop
+  private boss: Entity | null = null;
+  private bossActive = false;
+  private shopOpen = false;
 
   // view
   private dpr = 1;
@@ -178,8 +207,13 @@ export class AdventureEngine {
     this.consumed = new Set(s.consumed ?? []);
     this.openGates = new Set(s.openGates ?? []);
     this.lit = !!s.lit;
-    this.won = !!s.lit;
     this.playtime = s.playtime ?? 0;
+    this.atk = s.atk ?? 1;
+    this.dashUnlocked = !!s.dash;
+    this.swift = s.swift ?? 0;
+    this.lightLvl = s.lightLvl ?? 0;
+    this.bossDefeated = !!s.bossDefeated;
+    this.won = !!s.bossDefeated;
     this.px = s.x;
     this.py = s.y;
   }
@@ -200,6 +234,11 @@ export class AdventureEngine {
       openGates: [...this.openGates],
       lit: this.lit,
       playtime: this.playtime,
+      atk: this.atk,
+      dash: this.dashUnlocked,
+      swift: this.swift,
+      lightLvl: this.lightLvl,
+      bossDefeated: this.bossDefeated,
     };
   }
 
@@ -251,13 +290,18 @@ export class AdventureEngine {
     if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
     if (this.keysDown.has(k)) return;
     this.keysDown.add(k);
+    if (this.shopOpen) {
+      if (['escape', 'e', 'enter', 'q'].includes(k)) this.closeShop();
+      return;
+    }
     if (k === 'escape' || k === 'p') this.setPaused(!this.paused);
     if (this.paused) return;
     if (this.dialog) {
       if ([' ', 'enter', 'e', 'f'].includes(k)) this.advanceDialog();
       return;
     }
-    if ([' ', 'j', 'k', 'x'].includes(k)) this.queuedAttack = true;
+    if ([' ', 'j'].includes(k)) this.queuedAttack = true;
+    if (['k', 'l'].includes(k) && this.dashUnlocked) this.queuedDash = true;
     if (['e', 'f', 'enter'].includes(k)) this.queuedInteract = true;
   };
   private onKeyUp = (e: KeyboardEvent) => {
@@ -285,6 +329,67 @@ export class AdventureEngine {
     advAudio.unlock();
     if (this.dialog) this.advanceDialog();
     else this.queuedInteract = true;
+  }
+  pressDash() {
+    advAudio.unlock();
+    if (this.dashUnlocked && !this.dialog && !this.paused) this.queuedDash = true;
+  }
+
+  // ---- shop API (driven by the React overlay) ----
+  private shopItems(): ShopItem[] {
+    const vigorLvl = (this.maxHp - 6) / 2;
+    const bladeLvl = this.atk - 1;
+    return [
+      { id: 'vigor', name: 'Vigor Berry', desc: '+1 Heart of max health', cost: 12 + vigorLvl * 8, level: vigorLvl, max: 5 },
+      { id: 'blade', name: 'Whetstone', desc: '+1 Sword damage', cost: 20 + bladeLvl * 12, level: bladeLvl, max: 4 },
+      { id: 'dash', name: 'Wind Boots', desc: 'Unlock a Roll-Dash (dodge)', cost: 30, level: this.dashUnlocked ? 1 : 0, max: 1 },
+      { id: 'swift', name: 'Trail Charm', desc: 'Run faster', cost: 18 + this.swift * 14, level: this.swift, max: 2 },
+      { id: 'lantern', name: 'Lantern Charm', desc: 'Wider light in the dark', cost: 16 + this.lightLvl * 12, level: this.lightLvl, max: 2 },
+      { id: 'mend', name: 'Warm Meal', desc: 'Restore all hearts now', cost: 6, level: 0, max: 99 },
+    ];
+  }
+  buyUpgrade(id: string) {
+    const item = this.shopItems().find((i) => i.id === id);
+    if (!item) return;
+    if (item.level >= item.max) {
+      advAudio.sfx('error');
+      return;
+    }
+    if (this.embers < item.cost) {
+      advAudio.sfx('error');
+      this.opts.onToast('Not enough embers.', 'bad');
+      return;
+    }
+    this.embers -= item.cost;
+    switch (id) {
+      case 'vigor':
+        this.maxHp += 2;
+        this.hp = this.maxHp;
+        break;
+      case 'blade':
+        this.atk += 1;
+        break;
+      case 'dash':
+        this.dashUnlocked = true;
+        this.opts.onToast('Roll-Dash unlocked! (K / dash button)', 'good');
+        break;
+      case 'swift':
+        this.swift += 1;
+        break;
+      case 'lantern':
+        this.lightLvl += 1;
+        break;
+      case 'mend':
+        this.hp = this.maxHp;
+        break;
+    }
+    advAudio.sfx('coin');
+    this.pushSnapshot(true);
+  }
+  closeShop() {
+    this.shopOpen = false;
+    advAudio.sfx('ui');
+    this.pushSnapshot(true);
   }
   setPaused(p: boolean) {
     this.paused = p;
@@ -319,8 +424,12 @@ export class AdventureEngine {
     this.canvas.height = Math.round(this.cssH * this.dpr);
     this.lightCanvas.width = this.canvas.width;
     this.lightCanvas.height = this.canvas.height;
-    // aim for ~15 tiles tall, integer zoom
-    this.scale = Math.max(2, Math.min(5, Math.round(this.cssH / (TILE * 15))));
+    // Integer zoom based on the SHORT side so portrait phones don't get a sliver
+    // of world. Phones zoom in more (fewer tiles) for touch-friendly readability.
+    const minDim = Math.min(this.cssW, this.cssH);
+    const phone = this.cssW < 700;
+    const targetTiles = phone ? 8.5 : 13;
+    this.scale = Math.max(2, Math.min(5, Math.round(minDim / (TILE * targetTiles))));
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.ctx.imageSmoothingEnabled = false;
     this.lightCtx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -362,8 +471,9 @@ export class AdventureEngine {
       return;
     }
 
-    if (!this.dialog && this.fadeDir <= 0) {
-      this.updatePlayer(dt);
+    if (!this.dialog && !this.shopOpen && this.fadeDir <= 0) {
+      const dashing = this.updateDash(dt);
+      if (!dashing) this.updatePlayer(dt);
       this.updateAttack(dt);
     }
     this.updateEnemies(dt);
@@ -373,12 +483,16 @@ export class AdventureEngine {
     this.updateFloaters(dt);
     this.spawnAmbient(dt);
 
-    // music mood: danger when an enemy is chasing nearby
+    // music mood: boss theme, danger when chased, else the zone theme
     if (!this.won) {
-      const danger = this.map.entities.some(
-        (e) => e.kind === 'enemy' && !e.removed && Math.hypot(e.x - this.px, e.y - this.py) < 110,
-      );
-      advAudio.setMood(danger ? 'danger' : this.map.mood);
+      if (this.bossActive && this.map.id === 'overworld') {
+        advAudio.setMood('danger');
+      } else {
+        const danger = this.map.entities.some(
+          (e) => e.kind === 'enemy' && !e.removed && Math.hypot(e.x - this.px, e.y - this.py) < 110,
+        );
+        advAudio.setMood(danger ? 'danger' : this.map.mood);
+      }
     }
 
     if (this.queuedInteract) {
@@ -401,7 +515,9 @@ export class AdventureEngine {
       my = this.touchY;
     }
     let mag = Math.hypot(mx, my);
-    const sprint = k.has('shift') ? SPRINT : 1;
+    let sprintHeld = k.has('shift');
+    if (this.touchActive && Math.hypot(this.touchX, this.touchY) > 0.92) sprintHeld = true;
+    const sprint = sprintHeld ? SPRINT + this.swift * 0.22 : 1;
     this.moving = mag > 0.1 && this.attackT <= 0;
 
     // knockback decays
@@ -433,6 +549,53 @@ export class AdventureEngine {
     if (Math.abs(this.kx) + Math.abs(this.ky) > 1) this.tryMove(this.kx * dt, this.ky * dt);
 
     if (this.iframe > 0) this.iframe -= dt;
+  }
+
+  /** Roll-dash: a quick i-frame burst. Returns true while it owns movement. */
+  private updateDash(dt: number): boolean {
+    if (this.dashCool > 0) this.dashCool -= dt;
+    if (this.dashT > 0) {
+      this.dashT -= dt;
+      this.iframe = Math.max(this.iframe, this.dashT + 0.06);
+      const sp = 320;
+      this.tryMove(this.dashDir[0] * sp * dt, this.dashDir[1] * sp * dt);
+      this.moving = true;
+      this.anim += dt * 14;
+      this.particles.push({
+        x: this.px,
+        y: this.py - 8,
+        vx: 0,
+        vy: 0,
+        life: 0.22,
+        max: 0.22,
+        size: 2,
+        color: 'rgba(190,215,255,0.55)',
+        grav: 0,
+      });
+      return true;
+    }
+    if (this.queuedDash && this.dashUnlocked && this.dashCool <= 0) {
+      this.queuedDash = false;
+      let dx = 0;
+      let dy = 0;
+      const k = this.keysDown;
+      if (k.has('a') || k.has('arrowleft')) dx -= 1;
+      if (k.has('d') || k.has('arrowright')) dx += 1;
+      if (k.has('w') || k.has('arrowup')) dy -= 1;
+      if (k.has('s') || k.has('arrowdown')) dy += 1;
+      if (this.touchActive) {
+        dx = this.touchX;
+        dy = this.touchY;
+      }
+      const m = Math.hypot(dx, dy);
+      this.dashDir = m > 0.2 ? [dx / m, dy / m] : DIRV[this.dir];
+      this.dashT = 0.18;
+      this.dashCool = 0.55;
+      advAudio.sfx('warp');
+      return true;
+    }
+    this.queuedDash = false;
+    return false;
   }
 
   private tryMove(dx: number, dy: number) {
@@ -515,10 +678,12 @@ export class AdventureEngine {
       return;
     }
     // enemy
-    e.hp = (e.hp ?? 1) - 1;
+    e.hp = (e.hp ?? 1) - this.atk;
     e.hurtT = 0.18;
-    e.vx = (e.vx ?? 0) + dx * 150;
-    e.vy = (e.vy ?? 0) + dy * 150;
+    const heavy = e.enemy === 'wraith' || e.enemy === 'warden';
+    const knock = heavy ? 55 : 150;
+    e.vx = (e.vx ?? 0) + dx * knock;
+    e.vy = (e.vy ?? 0) + dy * knock;
     this.burst(e.x, e.y - 6, '#ffffff', 5);
     this.addFloater(e);
     advAudio.sfx('hit');
@@ -528,11 +693,43 @@ export class AdventureEngine {
   private killEnemy(e: Entity) {
     e.removed = true;
     advAudio.sfx('enemyDie');
+    if (e.enemy === 'wraith') {
+      this.defeatBoss(e);
+      return;
+    }
     this.burst(e.x, e.y - 6, e.enemy === 'warden' ? '#7a3aa0' : '#6a4f8a', 14);
     const n = e.enemy === 'warden' ? 6 : 1;
     for (let i = 0; i < n; i++) this.dropPickup(e.x + (Math.random() - 0.5) * 16, e.y, 'ember');
     if (Math.random() < (e.enemy === 'warden' ? 1 : 0.18)) this.dropPickup(e.x, e.y, 'heart');
     if (e.enemy === 'warden') this.opts.onToast('The Warden falls! The way is clear.', 'good');
+  }
+
+  private defeatBoss(e: Entity) {
+    this.boss = null;
+    this.bossActive = false;
+    this.bossDefeated = true;
+    this.won = true;
+    advAudio.setMood('victory');
+    advAudio.sfx('victory');
+    for (let i = 0; i < 90; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = 30 + Math.random() * 140;
+      this.particles.push({
+        x: e.x,
+        y: e.y - 14,
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s - 30,
+        life: 2.6,
+        max: 2.6,
+        size: 1 + Math.random() * 2,
+        color: ['#ffd36a', '#f6a93a', '#fff0b0'][Math.floor(Math.random() * 3)],
+        grav: 18,
+        glow: true,
+      });
+    }
+    for (let i = 0; i < 10; i++) this.dropPickup(e.x + (Math.random() - 0.5) * 26, e.y, 'ember');
+    this.opts.onToast('The Hollow Wraith is banished — the Emberwilds are saved!', 'good');
+    this.pushSnapshot(true);
   }
 
   private dropPickup(x: number, y: number, sub: 'ember' | 'heart' | 'key') {
@@ -563,7 +760,21 @@ export class AdventureEngine {
       const aggro = dist < (e.aggroR ?? 120) && !this.dead;
       let mvx = 0;
       let mvy = 0;
-      if (aggro) {
+      if (e.enemy === 'wraith') {
+        // relentless boss: pursue, periodically lunge and summon gloomlings
+        const a = Math.atan2(this.py - e.y, this.px - e.x);
+        let sp = e.speed ?? 22;
+        e.castT = (e.castT ?? 4) - dt;
+        const lunging = (e.castT ?? 0) < 0.55 && (e.castT ?? 0) > 0.1;
+        if (lunging) sp *= 4.2;
+        if ((e.castT ?? 0) <= 0) {
+          e.castT = 4 + Math.random() * 2.5;
+          this.summonAdds(e, 2);
+          this.burst(e.x, e.y - 14, '#7a3aa0', 16);
+        }
+        mvx = Math.cos(a) * sp;
+        mvy = Math.sin(a) * sp;
+      } else if (aggro) {
         const a = Math.atan2(this.py - e.y, this.px - e.x);
         let sp = e.speed ?? 24;
         if (e.enemy === 'slime') {
@@ -708,7 +919,12 @@ export class AdventureEngine {
         if (this.fadeDir === 0) this.startWarp(e);
       }
       const interactable =
-        e.kind === 'npc' || e.kind === 'sign' || e.kind === 'chest' || e.kind === 'gate' || e.kind === 'lantern';
+        e.kind === 'npc' ||
+        e.kind === 'sign' ||
+        e.kind === 'chest' ||
+        e.kind === 'gate' ||
+        e.kind === 'lantern' ||
+        e.kind === 'shop';
       if (interactable && d < bestD) {
         best = e;
         bestD = d;
@@ -730,7 +946,9 @@ export class AdventureEngine {
       case 'gate':
         return 'Unlock gate';
       case 'lantern':
-        return this.lit ? 'The Lantern burns bright' : 'Light the Lantern';
+        return this.bossDefeated ? 'The Lantern burns bright' : this.lit ? 'The Lantern burns' : 'Light the Lantern';
+      case 'shop':
+        return `${e.name} — Trade`;
       default:
         return 'Interact';
     }
@@ -752,6 +970,36 @@ export class AdventureEngine {
       this.openGate(e);
     } else if (e.kind === 'lantern') {
       this.tryLight();
+    } else if (e.kind === 'shop') {
+      this.faceNpcToPlayer(e);
+      this.shopOpen = true;
+      advAudio.sfx('ui');
+      this.pushSnapshot(true);
+    }
+  }
+
+  private summonAdds(boss: Entity, n: number) {
+    const live = this.map.entities.filter((x) => x.kind === 'enemy' && !x.removed).length;
+    if (live > 12) return;
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = 22 + Math.random() * 16;
+      this.map.entities.push({
+        id: `add${Math.random().toString(36).slice(2)}`,
+        kind: 'enemy',
+        enemy: 'slime',
+        x: boss.x + Math.cos(a) * d,
+        y: boss.y + Math.sin(a) * d,
+        r: 6,
+        hp: 2,
+        maxHp: 2,
+        speed: 32,
+        touch: 1,
+        reward: 2,
+        aggroR: 320,
+        homeX: boss.x,
+        homeY: boss.y,
+      });
     }
   }
 
@@ -830,13 +1078,15 @@ export class AdventureEngine {
       this.opts.onToast(`The Lantern is dark. Bring the Ember Shards. (${got}/4)`, 'info');
       return;
     }
-    if (this.lit) return;
+    if (this.bossDefeated) return;
+    if (this.lit) {
+      if (!this.bossActive) this.spawnBoss();
+      return;
+    }
     this.lit = true;
-    this.won = true;
     const lantern = this.map.entities.find((x) => x.kind === 'lantern');
     if (lantern) lantern.sprite = 'lanternLit';
-    advAudio.setMood('victory');
-    advAudio.sfx('victory');
+    advAudio.sfx('shard');
     for (let i = 0; i < 80; i++) {
       const a = Math.random() * Math.PI * 2;
       const s = 30 + Math.random() * 120;
@@ -853,8 +1103,39 @@ export class AdventureEngine {
         glow: true,
       });
     }
-    this.opts.onToast('The Lantern blazes — light returns to the Emberwilds!', 'good');
+    this.opts.onToast('Light floods the glade — but the Hollow gathers to smother it!', 'bad');
+    this.spawnBoss();
     this.pushSnapshot(true);
+  }
+
+  private spawnBoss() {
+    const lantern = this.map.entities.find((x) => x.kind === 'lantern');
+    const bx = lantern ? lantern.x : this.px;
+    const by = (lantern ? lantern.y : this.py) + 44;
+    const boss: Entity = {
+      id: 'hollow_wraith',
+      kind: 'enemy',
+      enemy: 'wraith',
+      x: bx,
+      y: by,
+      r: 13,
+      hp: 34,
+      maxHp: 34,
+      speed: 30,
+      touch: 2,
+      reward: 60,
+      aggroR: 99999,
+      homeX: bx,
+      homeY: by,
+      castT: 3,
+    };
+    this.map.entities.push(boss);
+    this.boss = boss;
+    this.bossActive = true;
+    advAudio.setMood('danger');
+    advAudio.sfx('warp');
+    this.burst(bx, by - 14, '#7a3aa0', 30);
+    this.opts.onToast('The Hollow Wraith rises! Strike it down.', 'bad');
   }
 
   // ------------------------------------------------------------------ warp
@@ -972,6 +1253,14 @@ export class AdventureEngine {
   }
 
   // ---------------------------------------------------------------- snapshot
+  private objective(): string {
+    if (this.bossDefeated) return 'The Emberwilds are saved. Roam free, Wayfarer.';
+    if (this.bossActive) return 'Defeat the Hollow Wraith at the glade!';
+    const got = this.shards.filter(Boolean).length;
+    if (got >= 4) return 'Return to the Lantern Tree and light it.';
+    return `Recover the Ember Shards — ${got}/4 (meadow, woods, shore, cavern).`;
+  }
+
   private pushSnapshot(force = false) {
     const snap: EngineSnapshot = {
       hp: this.hp,
@@ -992,6 +1281,14 @@ export class AdventureEngine {
       mapName: this.map.name,
       won: this.won,
       dead: this.dead,
+      objective: this.objective(),
+      stats: { atk: this.atk, dash: this.dashUnlocked, swift: this.swift, lightLvl: this.lightLvl },
+      canDash: this.dashUnlocked,
+      boss:
+        this.bossActive && this.boss && !this.boss.removed
+          ? { name: 'Hollow Wraith', hp: Math.max(0, this.boss.hp ?? 0), max: this.boss.maxHp ?? 1 }
+          : null,
+      shop: this.shopOpen ? this.shopItems() : null,
     };
     const key = JSON.stringify(snap);
     if (force || key !== this.lastSnap) {
@@ -1108,8 +1405,15 @@ export class AdventureEngine {
       this.drawEnemy(e, cx, cy, S);
       return;
     }
-    if (e.kind === 'npc') {
+    if (e.kind === 'npc' || e.kind === 'shop') {
       this.drawNpc(e, cx, cy, S);
+      if (e.kind === 'shop') {
+        // floating coin marker over a vendor
+        const mx = Math.round((e.x - cx) * S);
+        const my = Math.round((e.y - cy) * S) - 30 * S + Math.round(Math.sin(this.fireT * 3) * 2);
+        const m = this.props.ember;
+        ctx.drawImage(m.canvas, mx - (m.w / 2) * S, my, m.w * S, m.h * S);
+      }
       return;
     }
     // generic prop / chest / sign / gate / lantern / bush
@@ -1136,6 +1440,7 @@ export class AdventureEngine {
     if (e.enemy === 'slime') name = Math.floor((e.t ?? 0) * 6) % 2 ? 'slime1' : 'slime0';
     else if (e.enemy === 'bat') name = Math.floor((e.t ?? 0) * 10) % 2 ? 'bat1' : 'bat0';
     else if (e.enemy === 'warden') name = Math.floor((e.t ?? 0) * 3) % 2 ? 'warden1' : 'warden0';
+    else if (e.enemy === 'wraith') name = Math.floor((e.t ?? 0) * 4) % 2 ? 'wraith1' : 'wraith0';
     const sp = this.props[name];
     // shadow
     const gx = Math.round((e.x - cx) * S);
@@ -1307,7 +1612,7 @@ export class AdventureEngine {
         lc.arc(sx, sy, r, 0, Math.PI * 2);
         lc.fill();
       };
-      punch(this.px, this.py - 8, 90 + (this.attackT > 0 ? 16 : 0));
+      punch(this.px, this.py - 8, 90 + this.lightLvl * 28 + (this.attackT > 0 ? 16 : 0));
       for (const e of this.map.entities) {
         if (e.removed) continue;
         if (e.sprite === 'crystal' || e.sprite === 'mushroom') punch(e.x, e.y - 8, 36, 0.4);

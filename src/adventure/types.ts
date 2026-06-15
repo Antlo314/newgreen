@@ -11,6 +11,7 @@ export type EntityKind =
   | 'shard'
   | 'pickup'
   | 'npc'
+  | 'shop'
   | 'enemy'
   | 'lantern'
   | 'portal'
@@ -48,11 +49,12 @@ export interface Entity {
   facing?: number;
 
   // enemy
-  enemy?: 'slime' | 'bat' | 'warden';
+  enemy?: 'slime' | 'bat' | 'warden' | 'wraith';
   speed?: number;
   touch?: number; // contact damage
   reward?: number; // embers on death
   aggroR?: number;
+  castT?: number; // boss ability timer
 
   // portal
   toMap?: string;
@@ -103,6 +105,12 @@ export interface SaveData {
   openGates: string[];
   lit: boolean;
   playtime: number;
+  // progression / upgrades
+  atk: number; // sword damage
+  dash: boolean; // roll-dash unlocked
+  swift: number; // sprint upgrade level
+  lightLvl: number; // lantern charm level
+  bossDefeated: boolean;
 }
 
 export const SHARD_NAMES = ['Sunpetal Shard', 'Hollowwood Shard', 'Tidewatch Shard', 'Deepglow Shard'];

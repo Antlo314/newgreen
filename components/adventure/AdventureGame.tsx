@@ -47,6 +47,7 @@ export default function AdventureGame() {
   const [paused, setPaused] = useState(false);
   const [muted, setMuted] = useState(false);
   const [winDismissed, setWinDismissed] = useState(false);
+  const [showJournal, setShowJournal] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<AdventureEngine | null>(null);
@@ -169,6 +170,7 @@ export default function AdventureGame() {
               {snap.keys > 0 && <span className="ml-1 text-amber-200/80">🔑 {snap.keys}</span>}
             </div>
             <div className="pointer-events-auto flex gap-1.5">
+              <HudBtn onClick={() => setShowJournal(true)} label="📖" />
               <HudBtn onClick={toggleMute} label={muted ? '🔇' : '🔊'} />
               <HudBtn onClick={togglePause} label="⏸" />
             </div>
@@ -176,10 +178,26 @@ export default function AdventureGame() {
         </div>
       )}
 
-      {/* zone banner */}
+      {/* zone banner + objective */}
       {snap && (
-        <div className="pointer-events-none absolute left-1/2 top-2 z-10 -translate-x-1/2 text-center safe-pt">
+        <div className="pointer-events-none absolute left-1/2 top-2 z-10 flex max-w-[70%] -translate-x-1/2 flex-col items-center text-center safe-pt">
           <div className="font-retro text-[10px] tracking-wider text-amber-200/70 drop-shadow">{snap.mapName}</div>
+          <div className="mt-1 truncate text-[10px] text-amber-100/55">◇ {snap.objective}</div>
+        </div>
+      )}
+
+      {/* boss health bar */}
+      {snap?.boss && (
+        <div className="pointer-events-none absolute left-1/2 top-16 z-10 w-[78%] max-w-md -translate-x-1/2">
+          <div className="mb-1 text-center font-retro text-[10px] tracking-widest text-red-300 drop-shadow">
+            {snap.boss.name}
+          </div>
+          <div className="h-3 overflow-hidden rounded-full border border-red-400/40 bg-black/60">
+            <div
+              className="h-full bg-gradient-to-r from-red-600 to-rose-400 transition-[width] duration-200"
+              style={{ width: `${Math.max(0, (snap.boss.hp / snap.boss.max) * 100)}%` }}
+            />
+          </div>
         </div>
       )}
 
@@ -234,7 +252,9 @@ export default function AdventureGame() {
         onMove={(x, y) => engineRef.current?.setMoveAxis(x, y)}
         onAttack={() => engineRef.current?.pressAttack()}
         onInteract={() => engineRef.current?.pressInteract()}
+        onDash={() => engineRef.current?.pressDash()}
         hasPrompt={!!snap?.prompt}
+        canDash={!!snap?.canDash}
       />
 
       {/* pause */}
@@ -254,7 +274,86 @@ export default function AdventureGame() {
             </PanelBtn>
           </div>
           <div className="mt-5 max-w-xs text-center text-[10px] leading-relaxed text-amber-200/50">
-            Move WASD / arrows · Attack Space · Interact E · Sprint Shift · Pause Esc
+            Move WASD / arrows · Attack Space · Interact E · Sprint Shift · Dash K · Pause Esc
+          </div>
+        </Overlay>
+      )}
+
+      {/* journal */}
+      {showJournal && snap && (
+        <Overlay onClose={() => setShowJournal(false)}>
+          <div className="font-retro text-sm text-amber-200">JOURNAL</div>
+          <div className="mt-4 w-[300px] max-w-[86vw] space-y-3 text-left">
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-amber-200/50">Current Goal</div>
+              <div className="mt-1 text-sm text-amber-50/90">{snap.objective}</div>
+            </div>
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-amber-200/50">Ember Shards</div>
+              <div className="mt-1 space-y-0.5">
+                {snap.shardNames.map((n, i) => (
+                  <div key={i} className={`text-xs ${snap.shards[i] ? 'text-amber-200' : 'text-white/35'}`}>
+                    {snap.shards[i] ? '◆' : '◇'} {n}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-amber-200/50">Wayfarer</div>
+              <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-amber-50/80">
+                <span>❤ Health {snap.maxHp / 2}</span>
+                <span>⚔ Sword {snap.stats.atk}</span>
+                <span>✦ Embers {snap.embers}</span>
+                <span>🌀 Dash {snap.stats.dash ? 'yes' : 'no'}</span>
+              </div>
+            </div>
+          </div>
+          <div className="mt-5">
+            <PanelBtn onClick={() => setShowJournal(false)}>▸ Close</PanelBtn>
+          </div>
+        </Overlay>
+      )}
+
+      {/* shop */}
+      {snap?.shop && (
+        <Overlay onClose={() => engineRef.current?.closeShop()}>
+          <div className="font-retro text-sm text-amber-200">TAMSIN&apos;S WARES</div>
+          <div className="mt-1 text-xs text-amber-200/70">✦ {snap.embers} embers</div>
+          <div className="mt-4 w-[330px] max-w-[90vw] space-y-2">
+            {snap.shop.map((it) => {
+              const maxed = it.level >= it.max;
+              const afford = snap.embers >= it.cost;
+              return (
+                <button
+                  key={it.id}
+                  disabled={maxed || !afford}
+                  onClick={() => engineRef.current?.buyUpgrade(it.id)}
+                  className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition ${
+                    maxed
+                      ? 'border-amber-200/10 bg-black/30 opacity-50'
+                      : afford
+                      ? 'border-amber-300/40 bg-amber-400/10 hover:bg-amber-400/20 active:scale-[0.98]'
+                      : 'border-white/10 bg-black/30 opacity-60'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-amber-100">
+                      {it.name}
+                      {it.max > 1 && it.max < 90 && (
+                        <span className="ml-1.5 text-[10px] font-normal text-amber-200/50">
+                          Lv {it.level}/{it.max}
+                        </span>
+                      )}
+                    </div>
+                    <div className="truncate text-[11px] text-amber-50/60">{it.desc}</div>
+                  </div>
+                  <div className="shrink-0 text-xs font-bold text-amber-300">{maxed ? 'MAX' : `✦ ${it.cost}`}</div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-4">
+            <PanelBtn onClick={() => engineRef.current?.closeShop()}>▸ Done</PanelBtn>
           </div>
         </Overlay>
       )}
@@ -361,10 +460,10 @@ function MenuScreen({
 }
 
 function EmberField() {
-  // pure-CSS floating embers for the title screen
+  // pure-CSS floating embers for the title screen (fewer on small/mobile screens)
   const motes = React.useMemo(
     () =>
-      Array.from({ length: 26 }, (_, i) => ({
+      Array.from({ length: typeof window !== 'undefined' && window.innerWidth < 700 ? 12 : 26 }, (_, i) => ({
         left: Math.random() * 100,
         delay: Math.random() * 8,
         dur: 7 + Math.random() * 8,
@@ -450,10 +549,15 @@ function PanelBtn({ onClick, children }: { onClick: () => void; children: React.
   );
 }
 
-function Overlay({ children }: { children: React.ReactNode }) {
+function Overlay({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
   return (
-    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/75 p-6 backdrop-blur-sm">
-      <div className="animate-scaleIn flex flex-col items-center">{children}</div>
+    <div
+      className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/75 p-6 backdrop-blur-sm"
+      onClick={onClose ? () => onClose() : undefined}
+    >
+      <div className="animate-scaleIn flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+        {children}
+      </div>
     </div>
   );
 }
@@ -463,12 +567,16 @@ function MobileControls({
   onMove,
   onAttack,
   onInteract,
+  onDash,
   hasPrompt,
+  canDash,
 }: {
   onMove: (x: number, y: number) => void;
   onAttack: () => void;
   onInteract: () => void;
+  onDash: () => void;
   hasPrompt: boolean;
+  canDash: boolean;
 }) {
   const [touch, setTouch] = useState(false);
   useEffect(() => {
@@ -478,20 +586,33 @@ function MobileControls({
   return (
     <div className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-between p-4 pb-6 safe-pb">
       <Joystick onMove={onMove} />
-      <div className="flex flex-col items-end gap-3">
-        <button
-          onPointerDown={(e) => {
-            e.preventDefault();
-            onInteract();
-          }}
-          className={`flex h-14 w-14 items-center justify-center rounded-full border text-lg font-bold backdrop-blur-sm transition active:scale-90 ${
-            hasPrompt
-              ? 'border-amber-300/60 bg-amber-400/30 text-amber-50 shadow-[0_0_14px_rgba(245,180,90,0.5)]'
-              : 'border-amber-200/20 bg-black/45 text-amber-100/70'
-          }`}
-        >
-          ✋
-        </button>
+      <div className="flex items-end gap-3">
+        <div className="flex flex-col gap-3">
+          {canDash && (
+            <button
+              onPointerDown={(e) => {
+                e.preventDefault();
+                onDash();
+              }}
+              className="flex h-12 w-12 items-center justify-center rounded-full border border-sky-300/40 bg-sky-500/25 text-lg text-sky-50 backdrop-blur-sm transition active:scale-90"
+            >
+              🌀
+            </button>
+          )}
+          <button
+            onPointerDown={(e) => {
+              e.preventDefault();
+              onInteract();
+            }}
+            className={`flex h-14 w-14 items-center justify-center rounded-full border text-lg font-bold backdrop-blur-sm transition active:scale-90 ${
+              hasPrompt
+                ? 'border-amber-300/60 bg-amber-400/30 text-amber-50 shadow-[0_0_14px_rgba(245,180,90,0.5)]'
+                : 'border-amber-200/20 bg-black/45 text-amber-100/70'
+            }`}
+          >
+            ✋
+          </button>
+        </div>
         <button
           onPointerDown={(e) => {
             e.preventDefault();

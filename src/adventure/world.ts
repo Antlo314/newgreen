@@ -23,10 +23,12 @@ const tb = (ty: number) => ty * TILE + TILE;
 
 function npcAppearance(over: Partial<Appearance>): Appearance {
   return {
-    skin: 5,
+    body: 0,
+    skin: 7,
     hair: 2,
     hairColor: 0,
     brow: 0,
+    outfit: 0,
     top: 0,
     bottom: 0,
     shoes: 0,
@@ -203,12 +205,13 @@ function buildOverworld(): GameMap {
     y: tb(LY + 1),
     name: 'Keeper Adaeze',
     facing: 3,
-    appearance: npcAppearance({ skin: 6, hair: 4, hairColor: 8, top: 9, bottom: 1, accessory: 0, eyes: 2 }),
+    appearance: npcAppearance({ body: 1, skin: 9, hair: 12, hairColor: 8, outfit: 5, top: 9, bottom: 11, accessory: 11, accessoryColor: 7, eyes: 2 }),
     dialog: [
       'Keeper Adaeze: You came. The Lantern Tree has gone dark, traveler.',
-      'For an age its light kept the Hollow back. Now gloomlings wander the wilds.',
-      'Four Ember Shards were scattered to the meadow, the woods, the shore, and the deep cavern.',
-      'Bring them home and we will rekindle the light together. Walk safe.',
+      'For an age its light held back the Hollow — the hungry dark that unmakes all it touches.',
+      'Four Ember Shards were scattered: to the meadow, the woods, the shore, and the deep cavern.',
+      'Bring them home. But heed me — when the Lantern is rekindled, the Hollow will not go quietly.',
+      'Its heart will rise to smother the flame. Steel yourself to fight for the light. Walk safe.',
     ],
   });
 
@@ -219,7 +222,7 @@ function buildOverworld(): GameMap {
     y: tb(46),
     name: 'Mara',
     facing: 0,
-    appearance: npcAppearance({ skin: 3, hair: 3, hairColor: 2, top: 2, bottom: 4, accessory: 6, eyes: 0 }),
+    appearance: npcAppearance({ body: 1, skin: 4, hair: 4, hairColor: 2, outfit: 4, top: 2, bottom: 4, accessory: 7, accessoryColor: 9, eyes: 0 }),
     dialog: [
       'Mara: Careful in the meadow! The Sunpetal Shard glows out among the flowers,',
       'but squishy gloomlings bounce around it. Swing your blade — they pop!',
@@ -233,7 +236,7 @@ function buildOverworld(): GameMap {
     y: tb(18),
     name: 'Old Bramble',
     facing: 3,
-    appearance: npcAppearance({ skin: 7, hair: 1, hairColor: 7, brow: 3, top: 5, bottom: 2, accessory: 8, accessoryColor: 4, eyes: 6 }),
+    appearance: npcAppearance({ body: 0, skin: 9, hair: 0, hairColor: 8, brow: 3, outfit: 5, top: 5, bottom: 2, accessory: 9, accessoryColor: 4, eyes: 6 }),
     dialog: [
       'Old Bramble: Hmph. The Hollowwood Shard sits in yon clearing, ringed by gloom.',
       'And the Deepglow Shard? Down the cavern, north-east. A Warden squats over it.',
@@ -248,11 +251,38 @@ function buildOverworld(): GameMap {
     y: tb(45),
     name: 'Finn the Fisher',
     facing: 2,
-    appearance: npcAppearance({ skin: 4, hair: 10, hairColor: 3, brow: 1, top: 6, bottom: 0, accessory: 1, eyes: 4 }),
+    appearance: npcAppearance({ body: 0, skin: 4, hair: 2, hairColor: 3, brow: 3, outfit: 3, top: 6, bottom: 0, accessory: 3, accessoryColor: 2, eyes: 4 }),
     dialog: [
       'Finn: The Tidewatch Shard rests on the islet, past the old tide-gate.',
       "It's locked tight. A rusty key went missing in the woods — folks say it's in a chest out west.",
       'Find the key, open the gate, cross the bridge. Mind the gloom in the cavern, friend.',
+    ],
+  });
+
+  // Vendor — spend embers on upgrades (opens the shop overlay)
+  place({
+    id: 'npc_vendor',
+    kind: 'shop',
+    x: tc(LX + 5),
+    y: tb(LY + 4),
+    name: 'Tamsin the Tinker',
+    facing: 2,
+    appearance: npcAppearance({ body: 1, skin: 2, hair: 9, hairColor: 5, outfit: 1, top: 3, bottom: 9, accessory: 2, accessoryColor: 7, eyes: 3 }),
+  });
+
+  // Wandering bard — flavor & lore
+  place({
+    id: 'npc_bard',
+    kind: 'npc',
+    x: tc(34),
+    y: tb(44),
+    name: 'Iyola the Bard',
+    facing: 3,
+    appearance: npcAppearance({ body: 1, skin: 6, hair: 6, hairColor: 11, outfit: 6, top: 9, bottom: 10, accessory: 7, accessoryColor: 4, eyes: 7 }),
+    dialog: [
+      'Iyola: ♪ Four sparks of dawn, hidden away — to wake the Tree and burn the grey… ♪',
+      'They say the cavern Warden was once a guardian of the deep, hollowed out by the dark.',
+      "If you've embers to spare, Tamsin the Tinker keeps shop by the glade. Fine charms, fair prices.",
     ],
   });
 

@@ -10,6 +10,7 @@ import {
   HAIR_STYLES,
   HAIR_COLORS,
   BROWS,
+  OUTFITS,
   TOP_COLORS,
   BOTTOM_COLORS,
   SHOE_COLORS,
@@ -30,6 +31,23 @@ export function shade(hex: string, f: number): string {
   const g = cl(((n >> 8) & 255) * f);
   const b = cl((n & 255) * f);
   return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+}
+
+/** linear blend of two hex colors, t in [0,1] toward `to`. */
+function mix(from: string, to: string, t: number): string {
+  const pa = (h: string) => {
+    let s = h.replace('#', '');
+    if (s.length === 3) s = s[0] + s[0] + s[1] + s[1] + s[2] + s[2];
+    const n = parseInt(s, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const a = pa(from);
+  const b = pa(to);
+  const cl = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+  const r = cl(a[0] + (b[0] - a[0]) * t);
+  const g = cl(a[1] + (b[1] - a[1]) * t);
+  const bl = cl(a[2] + (b[2] - a[2]) * t);
+  return '#' + ((1 << 24) | (r << 16) | (g << 8) | bl).toString(16).slice(1);
 }
 
 function mulberry32(seed: number) {
@@ -87,6 +105,10 @@ interface Pal {
   eye: string;
   acc: string;
   accSh: string;
+  metal: string;
+  metalHi: string;
+  metalSh: string;
+  metalSh2: string;
 }
 
 function palFor(a: Appearance): Pal {
@@ -111,6 +133,11 @@ function palFor(a: Appearance): Pal {
     eye: EYE_COLORS[a.eyes].hex,
     acc,
     accSh: shade(acc, 0.78),
+    // armor steel, tinted by the chosen primary color so gold/blue plate works
+    metal: mix(top, '#9aa3b2', 0.42),
+    metalHi: shade(mix(top, '#c7cdd8', 0.5), 1.12),
+    metalSh: mix(top, '#5b6170', 0.42),
+    metalSh2: mix(top, '#3f4452', 0.5),
   };
 }
 
@@ -139,9 +166,11 @@ function drawActor(x: CanvasRenderingContext2D, a: Appearance, p: Pal, dir: numb
   // soft shadow
   px(x, 4, 22, 8, 1, 'rgba(0,0,0,0.20)');
   px(x, 5, 23, 6, 1, 'rgba(0,0,0,0.14)');
-  drawLegs(x, p, dir, frame);
-  drawBody(x, p, dir, frame, bob);
-  drawArms(x, p, dir, frame, bob);
+  const o = OUTFITS[a.outfit].id;
+  const femme = a.body === 1;
+  drawLegs(x, p, o, dir, frame);
+  drawTorso(x, p, o, femme, dir, bob);
+  drawArms(x, p, o, dir, frame, bob);
   drawHead(x, p, dir, bob);
   drawFace(x, p, a, dir, bob);
   drawBrow(x, p, a, dir, bob);
@@ -149,8 +178,20 @@ function drawActor(x: CanvasRenderingContext2D, a: Appearance, p: Pal, dir: numb
   drawAccessory(x, p, a, dir, bob);
 }
 
-function drawLegs(x: CanvasRenderingContext2D, p: Pal, dir: number, frame: number) {
+function drawLegs(x: CanvasRenderingContext2D, p: Pal, o: string, dir: number, frame: number) {
   const top = 17;
+  if (o === 'dress' || o === 'robe') {
+    // feet peek under the hem
+    if (dir === 2) {
+      px(x, 6, 21, 3, 2, shade(p.shoe, 0.85));
+      px(x, 8, 21, 3, 2, p.shoe);
+    } else {
+      px(x, 5, 21, 3, 2, p.shoe);
+      px(x, 8, 21, 3, 2, p.shoe);
+    }
+    return;
+  }
+  const armor = o === 'armor';
   if (dir === 2) {
     let frontX = 7;
     let backX = 5;
@@ -165,6 +206,10 @@ function drawLegs(x: CanvasRenderingContext2D, p: Pal, dir: number, frame: numbe
     px(x, backX, top + 3, 3, 2, shade(p.shoe, 0.8));
     px(x, frontX, top, 3, 5, p.pants);
     px(x, frontX, top + 3, 3, 2, p.shoe);
+    if (armor) {
+      px(x, frontX, top, 3, 3, p.metal);
+      px(x, frontX, top, 3, 1, p.metalHi);
+    }
     return;
   }
   let lLen = 5;
@@ -182,40 +227,192 @@ function drawLegs(x: CanvasRenderingContext2D, p: Pal, dir: number, frame: numbe
   px(x, 8, top, 3, rLen, p.pants);
   px(x, 8, top, 1, rLen, p.pantsSh);
   px(x, 8, top + rLen - 2, 3, 2, p.shoe);
-}
-
-function drawBody(x: CanvasRenderingContext2D, p: Pal, dir: number, frame: number, dy: number) {
-  const top = 11 + dy;
-  if (dir === 2) {
-    px(x, 5, top, 6, 6, p.top);
-    px(x, 5, top, 1, 6, p.topSh);
-    px(x, 9, top + 1, 1, 4, p.topHi);
-    px(x, 5, top + 5, 6, 1, p.topSh);
-    return;
+  if (armor) {
+    px(x, 5, top, 3, 3, p.metal);
+    px(x, 5, top, 1, 3, p.metalHi);
+    px(x, 8, top, 3, 3, p.metal);
+    px(x, 8, top, 1, 3, p.metalHi);
   }
-  px(x, 4, top, 8, 6, p.top);
-  px(x, 4, top, 1, 6, p.topSh);
-  px(x, 11, top, 1, 6, p.topSh);
-  px(x, 5, top + 1, 2, 1, p.topHi);
-  px(x, 4, top + 5, 8, 1, p.topSh);
-  if (dir === 0) px(x, 6, top, 4, 1, p.skinSh); // collar gap
 }
 
-function drawArms(x: CanvasRenderingContext2D, p: Pal, dir: number, frame: number, dy: number) {
+function drawTorso(x: CanvasRenderingContext2D, p: Pal, o: string, femme: boolean, dir: number, dy: number) {
+  const top = 11 + dy;
+  const shX = femme ? 5 : 4;
+  const shW = femme ? 6 : 8;
+  const sec = p.pants;
+  const secSh = p.pantsSh;
+
+  const base = (col: string, shc: string, hic: string) => {
+    if (dir === 2) {
+      px(x, 5, top, 6, 6, col);
+      px(x, 5, top, 1, 6, shc);
+      px(x, 9, top + 1, 1, 4, hic);
+      px(x, 5, top + 5, 6, 1, shc);
+    } else {
+      px(x, 4, top + 1, 8, 5, col);
+      px(x, shX, top, shW, 2, col);
+      px(x, 4, top + 1, 1, 5, shc);
+      px(x, 11, top + 1, 1, 5, shc);
+      if (femme) {
+        px(x, 4, top + 2, 1, 1, shc);
+        px(x, 11, top + 2, 1, 1, shc);
+      }
+      px(x, shX, top, shW, 1, hic);
+      px(x, 4, top + 5, 8, 1, shc);
+      if (dir === 0) px(x, 6, top, 4, 1, p.skinSh);
+    }
+  };
+
+  switch (o) {
+    case 'tunic':
+      base(p.top, p.topSh, p.topHi);
+      if (dir === 2) {
+        px(x, 5, top + 6, 6, 3, p.top);
+        px(x, 5, top + 6, 6, 1, sec);
+      } else {
+        px(x, 4, top + 6, 8, 3, p.top);
+        px(x, 4, top + 6, 8, 1, sec);
+        px(x, 4, top + 8, 8, 1, p.topSh);
+      }
+      break;
+    case 'vest': {
+      const shirt = shade(p.top, 1.35);
+      base(shirt, shade(p.top, 1.05), shade(p.top, 1.55));
+      if (dir === 2) {
+        px(x, 5, top, 2, 6, p.top);
+        px(x, 5, top, 2, 1, p.topHi);
+      } else {
+        px(x, 4, top + 1, 2, 5, p.top);
+        px(x, 10, top + 1, 2, 5, p.top);
+        px(x, shX, top, shW, 1, p.top);
+      }
+      break;
+    }
+    case 'overalls':
+      base(p.top, p.topSh, p.topHi);
+      if (dir === 2) {
+        px(x, 5, top + 2, 6, 4, sec);
+        px(x, 6, top, 1, 3, sec);
+      } else {
+        px(x, 5, top + 2, 6, 4, sec);
+        px(x, 5, top + 2, 1, 4, secSh);
+        px(x, 5, top + 5, 6, 1, secSh);
+        px(x, 5, top, 1, 3, sec);
+        px(x, 10, top, 1, 3, sec);
+        px(x, 7, top + 3, 1, 1, '#e6bd4a');
+        px(x, 9, top + 3, 1, 1, '#e6bd4a');
+      }
+      break;
+    case 'dress':
+      if (dir === 2) {
+        px(x, 5, top, 6, 4, p.top);
+        px(x, 5, top, 6, 1, p.topHi);
+        px(x, 4, top + 4, 8, 2, sec);
+        px(x, 3, top + 6, 9, 4, sec);
+        px(x, 3, top + 9, 9, 1, secSh);
+      } else {
+        px(x, shX, top, shW, 4, p.top);
+        px(x, shX, top, shW, 1, p.topHi);
+        px(x, 4, top, 1, 4, p.topSh);
+        px(x, 11, top, 1, 4, p.topSh);
+        if (dir === 0) px(x, 6, top, 4, 1, p.skinSh);
+        px(x, 4, top + 4, 8, 2, sec);
+        px(x, 3, top + 6, 10, 2, sec);
+        px(x, 2, top + 8, 12, 2, sec);
+        px(x, 4, top + 4, 8, 1, shade(sec, 1.15));
+        px(x, 2, top + 9, 12, 1, secSh);
+      }
+      break;
+    case 'robe':
+      if (dir === 2) {
+        px(x, 5, top, 6, 11, p.top);
+        px(x, 5, top, 6, 1, p.topHi);
+        px(x, 7, top + 1, 1, 10, sec);
+        px(x, 5, top + 10, 6, 1, secSh);
+      } else {
+        px(x, 4, top, 8, 11, p.top);
+        px(x, 4, top, 8, 1, p.topHi);
+        px(x, 4, top, 1, 11, p.topSh);
+        px(x, 11, top, 1, 11, p.topSh);
+        px(x, 7, top + 1, 2, 10, sec);
+        px(x, 4, top + 10, 8, 1, secSh);
+        if (dir === 0) px(x, 6, top, 3, 1, p.skinSh);
+      }
+      break;
+    case 'noble':
+      base(p.top, p.topSh, p.topHi);
+      if (dir === 2) {
+        px(x, 5, top, 1, 4, sec);
+        px(x, 5, top + 6, 6, 2, p.top);
+        px(x, 5, top + 6, 6, 1, p.topSh);
+      } else {
+        px(x, 5, top, 1, 4, sec);
+        px(x, 10, top, 1, 4, sec);
+        px(x, 8, top + 1, 1, 1, '#e6bd4a');
+        px(x, 8, top + 3, 1, 1, '#e6bd4a');
+        px(x, 4, top + 6, 8, 2, p.top);
+        px(x, 4, top + 6, 8, 1, p.topSh);
+        px(x, 7, top + 6, 2, 2, sec);
+      }
+      break;
+    case 'armor':
+      base(p.metalSh, p.metalSh2, p.metalHi);
+      if (dir === 2) {
+        px(x, 5, top, 6, 5, p.metal);
+        px(x, 5, top, 6, 1, p.metalHi);
+        px(x, 9, top + 1, 1, 3, p.metalHi);
+      } else {
+        px(x, shX, top, shW, 5, p.metal);
+        px(x, shX, top, shW, 1, p.metalHi);
+        px(x, 4, top, 2, 2, p.metal);
+        px(x, 10, top, 2, 2, p.metal);
+        px(x, 4, top, 2, 1, p.metalHi);
+        px(x, 10, top, 2, 1, p.metalHi);
+        px(x, 7, top + 1, 2, 3, p.metalSh);
+        px(x, 5, top + 2, 1, 1, p.metalHi);
+        px(x, 10, top + 2, 1, 1, p.metalHi);
+      }
+      break;
+    default: // adventurer
+      base(p.top, p.topSh, p.topHi);
+  }
+
+  // feminine chest contour (skip for heavy/closed garments)
+  if (femme && o !== 'armor' && o !== 'robe' && dir !== 1) {
+    const cy = top + 2;
+    if (dir === 2) px(x, 9, cy, 1, 1, p.topSh);
+    else {
+      px(x, 6, cy, 1, 1, p.topSh);
+      px(x, 9, cy, 1, 1, p.topSh);
+    }
+  }
+}
+
+function drawArms(x: CanvasRenderingContext2D, p: Pal, o: string, dir: number, frame: number, dy: number) {
   const top = 11 + dy;
   const swing = frame === 1 ? 1 : frame === 3 ? -1 : 0;
+  const longSleeve = o === 'robe' || o === 'noble';
+  let sleeve = p.top;
+  if (o === 'vest') sleeve = shade(p.top, 1.35);
+  if (o === 'armor') sleeve = p.metal;
+  const sl = longSleeve ? 5 : 4;
   if (dir === 2) {
     const ay = top + 1 + (swing > 0 ? 1 : swing < 0 ? -1 : 0);
-    px(x, 9, ay, 2, 4, p.top);
-    px(x, 9, ay + 4, 2, 2, p.skin);
+    px(x, 9, ay, 2, sl, sleeve);
+    px(x, 9, ay + sl, 2, 2, p.skin);
+    if (o === 'armor') px(x, 9, ay, 2, 2, p.metalHi);
     return;
   }
   const lY = top + 1 + swing;
   const rY = top + 1 - swing;
-  px(x, 2, lY, 2, 4, p.top);
-  px(x, 2, lY + 4, 2, 2, p.skin);
-  px(x, 12, rY, 2, 4, p.top);
-  px(x, 12, rY + 4, 2, 2, p.skin);
+  px(x, 2, lY, 2, sl, sleeve);
+  px(x, 2, lY + sl, 2, 2, p.skin);
+  px(x, 12, rY, 2, sl, sleeve);
+  px(x, 12, rY + sl, 2, 2, p.skin);
+  if (o === 'armor') {
+    px(x, 2, lY, 2, 2, p.metalHi);
+    px(x, 12, rY, 2, 2, p.metalHi);
+  }
 }
 
 function drawHead(x: CanvasRenderingContext2D, p: Pal, dir: number, dy: number) {
@@ -310,6 +507,46 @@ function drawHair(x: CanvasRenderingContext2D, p: Pal, a: Appearance, dir: numbe
   };
 
   switch (id) {
+    case 'fade':
+      if (dir === 2) {
+        px(x, 5, top - 1, 6, 2, H);
+        px(x, 5, top - 1, 6, 1, HH);
+      } else {
+        px(x, 4, top - 1, 8, 2, H);
+        px(x, 4, top - 1, 8, 1, HH);
+        px(x, 4, top + 1, 1, 1, HS);
+        px(x, 11, top + 1, 1, 1, HS);
+      }
+      back();
+      break;
+    case 'highpuff':
+      cap();
+      back();
+      if (dir === 2) {
+        px(x, 5, top - 5, 5, 4, H);
+        px(x, 5, top - 5, 5, 1, HH);
+      } else {
+        px(x, 5, top - 5, 6, 4, H);
+        px(x, 5, top - 5, 6, 1, HH);
+        px(x, 5, top - 2, 1, 1, HS);
+        px(x, 10, top - 2, 1, 1, HS);
+      }
+      break;
+    case 'twists': {
+      cap();
+      back();
+      const ys = top + 3;
+      if (dir !== 2) {
+        for (let i = 0; i < 4; i++) px(x, 4 + i * 2, top - 1, 1, 3, i % 2 ? HS : H);
+        px(x, 3, ys, 1, 6, H);
+        px(x, 12, ys, 1, 6, H);
+        if (dir === 1) for (let i = 0; i < 4; i++) px(x, 4 + i * 2, top + 5, 1, 4, i % 2 ? HS : H);
+      } else {
+        px(x, 4, ys, 1, 5, H);
+        px(x, 5, ys + 1, 1, 4, HS);
+      }
+      break;
+    }
     case 'short':
       cap();
       back();
@@ -530,6 +767,40 @@ function drawAccessory(x: CanvasRenderingContext2D, p: Pal, a: Appearance, dir: 
       }
       break;
     }
+    case 'visor':
+      px(x, 4, top + 1, 8, 1, A);
+      px(x, 4, top + 1, 1, 1, shade(A, 1.2));
+      if (dir === 0) px(x, 7, top + 2, 6, 1, AS);
+      else if (dir === 2) px(x, 10, top + 2, 4, 1, AS);
+      break;
+    case 'hood':
+      if (dir === 1) {
+        px(x, 3, top - 2, 10, 9, A);
+        px(x, 3, top - 2, 10, 1, shade(A, 1.15));
+      } else {
+        px(x, 3, top - 2, 10, 4, A);
+        px(x, 3, top - 2, 1, 7, A);
+        px(x, 12, top - 2, 1, 7, A);
+        px(x, 3, top - 2, 10, 1, shade(A, 1.15));
+        if (dir === 0) {
+          px(x, 4, top + 5, 1, 2, A);
+          px(x, 11, top + 5, 1, 2, A);
+        }
+      }
+      break;
+    case 'horns':
+      if (dir === 2) {
+        px(x, 6, top - 3, 1, 3, A);
+        px(x, 7, top - 4, 1, 2, A);
+      } else {
+        px(x, 4, top - 3, 1, 3, A);
+        px(x, 5, top - 4, 1, 2, A);
+        px(x, 11, top - 3, 1, 3, A);
+        px(x, 10, top - 4, 1, 2, A);
+        px(x, 4, top - 3, 1, 1, shade(A, 1.2));
+        px(x, 11, top - 3, 1, 1, shade(A, 1.2));
+      }
+      break;
     case 'wizard': {
       px(x, 6, top - 6, 4, 2, A);
       px(x, 5, top - 4, 6, 2, A);
@@ -709,7 +980,9 @@ export type PropName =
   | 'bat0'
   | 'bat1'
   | 'warden0'
-  | 'warden1';
+  | 'warden1'
+  | 'wraith0'
+  | 'wraith1';
 
 export function buildProps(): Record<PropName, Sprite> {
   const tree = sprite(26, 30, (x) => {
@@ -972,6 +1245,32 @@ export function buildProps(): Record<PropName, Sprite> {
       px(x, 2, y + 14 - pulse, 22, 2, '#241836');
     });
 
+  const wraith = (pulse: number) =>
+    sprite(32, 34, (x) => {
+      const y = 4 + pulse;
+      // billowing shadow body
+      px(x, 6, y + 4, 20, 22 - pulse, '#241634');
+      px(x, 4, y + 8, 24, 13, '#2c1a40');
+      // tattered tendrils
+      for (let i = 0; i < 6; i++) px(x, 5 + i * 4, y + 23 - pulse, 2, 7, i % 2 ? '#2c1a40' : '#1a0f28');
+      // hooded head
+      px(x, 9, y, 14, 10, '#1a0f28');
+      px(x, 9, y, 14, 2, '#3a2358');
+      px(x, 8, y + 2, 1, 6, '#1a0f28');
+      px(x, 23, y + 2, 1, 6, '#1a0f28');
+      // glowing eyes
+      px(x, 12, y + 4, 3, 3, '#ff4d6a');
+      px(x, 18, y + 4, 3, 3, '#ff4d6a');
+      px(x, 12, y + 4, 1, 1, '#ffd0d8');
+      px(x, 18, y + 4, 1, 1, '#ffd0d8');
+      // shoulder spikes
+      px(x, 5, y + 6, 2, 4, '#3a2358');
+      px(x, 25, y + 6, 2, 4, '#3a2358');
+      // gloom core
+      px(x, 14, y + 12, 4, 4, '#7a3aa0');
+      px(x, 15, y + 13, 2, 2, '#c77adf');
+    });
+
   return {
     tree,
     pine,
@@ -1003,5 +1302,7 @@ export function buildProps(): Record<PropName, Sprite> {
     bat1: bat(2),
     warden0: warden(0),
     warden1: warden(2),
+    wraith0: wraith(0),
+    wraith1: wraith(3),
   };
 }

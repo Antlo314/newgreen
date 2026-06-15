@@ -4,41 +4,55 @@
 // feed to the procedural sprite renderer (see sprites.ts).
 
 export interface Appearance {
+  body: number; // BODIES index (silhouette)
   skin: number;
   hair: number; // style index into HAIR_STYLES
   hairColor: number;
   brow: number; // facial hair / brow style index
-  top: number; // shirt color
-  bottom: number; // pants color
+  outfit: number; // OUTFITS index (garment shape)
+  top: number; // primary garment color
+  bottom: number; // secondary garment color (pants / skirt / trim)
   shoes: number;
   eyes: number;
   accessory: number; // hat / glasses style index into ACCESSORIES
   accessoryColor: number;
 }
 
-// Rich, deliberately broad skin range — honoring the same community the parent
-// project celebrates, with lighter and fantasy tones included for full freedom.
+// Two silhouettes. Both share every other option — no option is gated by body.
+export const BODIES: { id: string; name: string }[] = [
+  { id: 'masc', name: 'Masculine' },
+  { id: 'femme', name: 'Feminine' },
+];
+
+// A broad, smooth skin range plus a couple of fantasy tones for full freedom.
 export const SKIN_TONES: { name: string; hex: string }[] = [
   { name: 'Porcelain', hex: '#f6d3b0' },
+  { name: 'Ivory', hex: '#efc6a0' },
   { name: 'Honey', hex: '#eab98a' },
   { name: 'Almond', hex: '#d99b6c' },
   { name: 'Caramel', hex: '#c07c4e' },
   { name: 'Umber', hex: '#a8633a' },
+  { name: 'Sienna', hex: '#97562f' },
   { name: 'Chestnut', hex: '#8a4e2d' },
   { name: 'Mahogany', hex: '#6f3d22' },
-  { name: 'Espresso', hex: '#522c18' },
-  { name: 'Onyx', hex: '#3a2012' },
+  { name: 'Cocoa', hex: '#5d3420' },
+  { name: 'Espresso', hex: '#462817' },
+  { name: 'Onyx', hex: '#341d10' },
   { name: 'Olive', hex: '#c8a878' },
   { name: 'Rose', hex: '#f0c0a8' },
   { name: 'Moss Folk', hex: '#9fb87a' },
+  { name: 'Dusk Elf', hex: '#b9a9d6' },
 ];
 
 export const HAIR_STYLES: { id: string; name: string }[] = [
   { id: 'bald', name: 'Bald' },
   { id: 'short', name: 'Short' },
+  { id: 'fade', name: 'Fade' },
   { id: 'afro', name: 'Afro' },
+  { id: 'highpuff', name: 'High Puff' },
   { id: 'puffs', name: 'Puffs' },
   { id: 'locs', name: 'Locs' },
+  { id: 'twists', name: 'Twists' },
   { id: 'braids', name: 'Cornrows' },
   { id: 'ponytail', name: 'Ponytail' },
   { id: 'bun', name: 'Top Bun' },
@@ -74,6 +88,18 @@ export const BROWS: { id: string; name: string }[] = [
   { id: 'mustache', name: 'Mustache' },
 ];
 
+// Garment shapes. top = primary color, bottom = secondary (pants/skirt/trim).
+export const OUTFITS: { id: string; name: string }[] = [
+  { id: 'adventurer', name: 'Adventurer' },
+  { id: 'tunic', name: 'Tunic' },
+  { id: 'vest', name: 'Vest' },
+  { id: 'overalls', name: 'Overalls' },
+  { id: 'dress', name: 'Dress' },
+  { id: 'robe', name: 'Robe' },
+  { id: 'noble', name: 'Noble' },
+  { id: 'armor', name: 'Armor' },
+];
+
 export const TOP_COLORS: { name: string; hex: string }[] = [
   { name: 'Ember', hex: '#e0712f' },
   { name: 'Crimson', hex: '#b83232' },
@@ -89,6 +115,8 @@ export const TOP_COLORS: { name: string; hex: string }[] = [
   { name: 'Cream', hex: '#e8dcc0' },
   { name: 'Charcoal', hex: '#33333d' },
   { name: 'Kente Gold', hex: '#f2c14e' },
+  { name: 'Steel', hex: '#8b94a6' },
+  { name: 'Wine', hex: '#7a2b40' },
 ];
 
 export const BOTTOM_COLORS: { name: string; hex: string }[] = [
@@ -102,6 +130,8 @@ export const BOTTOM_COLORS: { name: string; hex: string }[] = [
   { name: 'Charcoal', hex: '#2b2b33' },
   { name: 'Forest', hex: '#2f5638' },
   { name: 'Sand', hex: '#c4a878' },
+  { name: 'Plum', hex: '#4a2f5a' },
+  { name: 'Gold Trim', hex: '#d9a93a' },
 ];
 
 export const SHOE_COLORS: { name: string; hex: string }[] = [
@@ -131,10 +161,13 @@ export const ACCESSORIES: { id: string; name: string }[] = [
   { id: 'beanie', name: 'Beanie' },
   { id: 'headband', name: 'Headband' },
   { id: 'glasses', name: 'Glasses' },
+  { id: 'visor', name: 'Visor' },
   { id: 'flowercrown', name: 'Flower Crown' },
   { id: 'bandana', name: 'Bandana' },
+  { id: 'hood', name: 'Hood' },
   { id: 'wizard', name: 'Pointed Hat' },
   { id: 'crown', name: 'Circlet' },
+  { id: 'horns', name: 'Horns' },
 ];
 
 export const ACCESSORY_COLORS: { name: string; hex: string }[] = [
@@ -151,10 +184,12 @@ export const ACCESSORY_COLORS: { name: string; hex: string }[] = [
 ];
 
 export const DEFAULT_APPEARANCE: Appearance = {
-  skin: 5,
-  hair: 2,
+  body: 0,
+  skin: 7,
+  hair: 3,
   hairColor: 0,
   brow: 0,
+  outfit: 0,
   top: 0,
   bottom: 0,
   shoes: 0,
@@ -166,17 +201,34 @@ export const DEFAULT_APPEARANCE: Appearance = {
 export function randomAppearance(rand: () => number = Math.random): Appearance {
   const pick = (n: number) => Math.floor(rand() * n);
   return {
+    body: pick(BODIES.length),
     skin: pick(SKIN_TONES.length),
     hair: pick(HAIR_STYLES.length),
     hairColor: pick(HAIR_COLORS.length),
-    brow: rand() < 0.7 ? 0 : pick(BROWS.length),
+    brow: rand() < 0.72 ? 0 : pick(BROWS.length),
+    outfit: pick(OUTFITS.length),
     top: pick(TOP_COLORS.length),
     bottom: pick(BOTTOM_COLORS.length),
     shoes: pick(SHOE_COLORS.length),
     eyes: pick(EYE_COLORS.length),
-    accessory: rand() < 0.45 ? pick(ACCESSORIES.length) : 0,
+    accessory: rand() < 0.5 ? pick(ACCESSORIES.length) : 0,
     accessoryColor: pick(ACCESSORY_COLORS.length),
   };
+}
+
+/** Sensible defaults for a "feminine" or "masculine" preset (still fully editable). */
+export function presetAppearance(body: number, rand: () => number = Math.random): Appearance {
+  const a = randomAppearance(rand);
+  a.body = body;
+  if (body === 1) {
+    a.outfit = [4, 5, 0, 1, 2][Math.floor(rand() * 5)]; // favor dress/robe
+    a.hair = [12, 4, 9, 14, 6][Math.floor(rand() * 5)]; // long / puff / ponytail / curls / locs
+    a.brow = 0;
+  } else {
+    a.outfit = [0, 1, 2, 3, 7][Math.floor(rand() * 5)];
+    a.hair = [1, 2, 3, 8, 11][Math.floor(rand() * 5)];
+  }
+  return a;
 }
 
 /** Clamp a possibly-stale saved appearance back into valid index ranges. */
@@ -187,10 +239,12 @@ export function sanitizeAppearance(a: Partial<Appearance> | null | undefined): A
   };
   const d = DEFAULT_APPEARANCE;
   return {
+    body: c(a?.body, BODIES.length, d.body),
     skin: c(a?.skin, SKIN_TONES.length, d.skin),
     hair: c(a?.hair, HAIR_STYLES.length, d.hair),
     hairColor: c(a?.hairColor, HAIR_COLORS.length, d.hairColor),
     brow: c(a?.brow, BROWS.length, d.brow),
+    outfit: c(a?.outfit, OUTFITS.length, d.outfit),
     top: c(a?.top, TOP_COLORS.length, d.top),
     bottom: c(a?.bottom, BOTTOM_COLORS.length, d.bottom),
     shoes: c(a?.shoes, SHOE_COLORS.length, d.shoes),
