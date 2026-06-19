@@ -6,6 +6,7 @@ import { useCoarse } from './useCoarse';
 import {
   adjacencyInfo,
   boonActive,
+  boonMarketMult,
   BUILDINGS,
   CIVICS,
   civicCost,
@@ -591,7 +592,11 @@ function MarketPanel() {
         const have = Math.floor(type === 'goods' ? s.goods : s[type]);
         const price = s.marketPrices[type];
         const buyDiscount = 1 - (s.skills.haggle ?? 0) * 0.04; // mirrors HAGGLE_BUY_PER_PT
-        const buyPrice = Math.ceil(price * 1.25 * buyDiscount);
+        const sellMult = (1 + (s.skills.haggle ?? 0) * 0.05) * boonMarketMult(s.quests);
+        // mirrors the store's no-arbitrage clamp exactly, per quantity: the ask
+        // never dips to/below the bid, so a round trip is always a small loss
+        const buyCostFor = (qty: number) =>
+          Math.max(Math.ceil(price * 1.25 * qty * buyDiscount), Math.floor(price * qty * sellMult) + 1);
         return (
           <div key={type} className="rounded-xl border border-white/10 bg-white/5 p-3">
             <div className="flex items-center justify-between">
@@ -624,11 +629,11 @@ function MarketPanel() {
                   {[1, 10].map((qty) => (
                     <button
                       key={`b${qty}`}
-                      disabled={s.bswx < buyPrice * qty}
+                      disabled={s.bswx < buyCostFor(qty)}
                       onClick={() => s.buyResource(type as 'wood' | 'stone' | 'clay', qty)}
                       className="rounded-lg border border-sky-400/40 bg-sky-400/10 px-2.5 py-1 text-[11px] font-bold text-sky-200 transition hover:bg-sky-400/20 disabled:cursor-not-allowed disabled:opacity-30"
                     >
-                      Buy {qty} (◆{buyPrice * qty})
+                      Buy {qty} (◆{buyCostFor(qty)})
                     </button>
                   ))}
                 </span>

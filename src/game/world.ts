@@ -100,6 +100,17 @@ export const HUT_SPOTS: { x: number; z: number }[] = [
 ];
 const HUT_KEEP = 3.4; // radius around each hut the player can't build in
 
+// Founders' daytime work posts — where each NPC stands while open for business.
+// Kept clear so a building can never be dropped onto a quest-giver (which would
+// block the player from reaching them). Mirrors each NPCDef.x/z in data.ts.
+export const NPC_POST_SPOTS: { x: number; z: number }[] = [
+  { x: 2, z: -3 }, // O.W. Gurley (also inside the plaza keep)
+  { x: 14, z: 9 }, // Sarah Rector
+  { x: -13, z: 8 }, // J.B. Stradford
+  { x: -4, z: 16 }, // Pharoah Gerumba
+];
+const POST_KEEP = 4.5; // radius around each post — clears interaction even for the largest footprint
+
 /** Snap a world coordinate to the center of its grid cell. */
 export function snapToGrid(v: number): number {
   return Math.round(v / GRID) * GRID;
@@ -122,6 +133,12 @@ export function canBuildAt(
     const dx = h.x - x;
     const dz = h.z - z;
     if (dx * dx + dz * dz < HUT_KEEP * HUT_KEEP) return false;
+  }
+  // keep the founders' work posts clear so a building can't bury a quest-giver
+  for (const p of NPC_POST_SPOTS) {
+    const dx = p.x - x;
+    const dz = p.z - z;
+    if (dx * dx + dz * dz < POST_KEEP * POST_KEEP) return false;
   }
   // not in (or right beside) the river — this is what stops building in water
   if (Math.abs(x - RIVER_X) < RIVER_WIDTH / 2 + 2) return false;

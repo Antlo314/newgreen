@@ -96,7 +96,7 @@ export const BUILDINGS: Record<BuildingId, BuildingConfig> = {
     income: 30,
     repReward: 100,
     xpReward: 160,
-    repRequired: 140,
+    repRequired: 110,
     questRequired: 'banking_tomorrow',
     footprint: 4.2,
   },
@@ -477,6 +477,7 @@ export const QUESTS: QuestDef[] = [
     title: 'Clay of the Creek',
     giver: 'rector',
     line: 'side',
+    requires: 'open_for_business',
     intro: [
       'The riverbank south of the plaza hides rich red clay — the same earth my fortune rose from.',
       'Bring me 15 clay and I will teach you what land is truly worth.',
@@ -510,6 +511,7 @@ export const QUESTS: QuestDef[] = [
     title: 'Voices of Greenwood',
     giver: 'gerumba',
     line: 'side',
+    requires: 'banking_tomorrow',
     intro: [
       'A builder who does not listen builds walls, not communities.',
       'Walk the district. Speak with Gurley, Rector, and Stradford. Hear what this place means to each of them.',

@@ -561,7 +561,7 @@ export const useGame = create<GameState>((set, get) => {
   }
 
   function earn(amount: number) {
-    if (amount <= 0) return;
+    if (!Number.isFinite(amount) || amount <= 0) return;
     const state = get();
     set({ bswx: state.bswx + amount, totalEarned: state.totalEarned + amount });
     applyQuestEvent('earn', null, amount);
@@ -1031,9 +1031,11 @@ export const useGame = create<GameState>((set, get) => {
 
         if (fortune?.repPerTick) {
           set({ reputation: get().reputation + fortune.repPerTick });
-          checkReputationObjectives();
         }
         checkGoals();
+        // guarantee reputation-kind quest objectives track every tick, whatever
+        // moved reputation this cycle
+        checkReputationObjectives();
       }
 
       // ------------------------------------------------------------------
@@ -1295,11 +1297,28 @@ export const useGame = create<GameState>((set, get) => {
         set({ dialogue: null, panel: null });
         return;
       }
+      const qid = d.questId;
+      const def = QUEST_BY_ID[qid];
       const quests = { ...state.quests };
-      quests[d.questId] = { ...quests[d.questId], status: 'active' };
-      set({ quests, dialogue: null, panel: null, trackedQuest: d.questId });
-      get().addToast(`Quest accepted: ${QUEST_BY_ID[d.questId].title}`, 'quest', '◆');
+      // credit what the player already holds toward gather objectives, so a
+      // calling's starting stock (or anything harvested before accepting) counts
+      // rather than reading as 0/N next to a full inventory
+      const progress = def.objectives.map((o, i) => {
+        if (o.kind === 'gather' && o.target) {
+          const have = (state[o.target as 'wood' | 'stone' | 'clay'] as number) ?? 0;
+          return Math.min(o.amount, Math.floor(have));
+        }
+        return quests[qid].progress[i] ?? 0;
+      });
+      const ready = def.objectives.every((o, i) => progress[i] >= o.amount);
+      quests[qid] = { status: ready ? 'ready' : 'active', progress };
+      set({ quests, dialogue: null, panel: null, trackedQuest: qid });
+      get().addToast(`Quest accepted: ${def.title}`, 'quest', '◆');
       audio.sfx('questAccept');
+      if (ready) {
+        get().addToast(`Quest ready to turn in: ${def.title}`, 'quest', '!');
+        audio.sfx('questReady');
+      }
       checkReputationObjectives();
     },
 
@@ -1315,6 +1334,12 @@ export const useGame = create<GameState>((set, get) => {
       if (!cfg) return;
       if (s.quests['first_foundations']?.status !== 'done') {
         get().addToast('Complete First Foundations before you can build.', 'warn', '!');
+        return;
+      }
+      // enforce the rep / quest gate in the store too (not just the disabled
+      // panel button) so no alternate caller can bypass progression
+      if (s.reputation < cfg.repRequired || (cfg.questRequired && s.quests[cfg.questRequired]?.status !== 'done')) {
+        get().addToast(`The ${cfg.name} isn’t available to build yet.`, 'warn', '!');
         return;
       }
       // start the ghost a few cells in front of the player
@@ -1396,11 +1421,28 @@ export const useGame = create<GameState>((set, get) => {
       const refundWood = Math.round(cfg.cost.wood * 0.4 * plot.level);
       const refundStone = Math.round(cfg.cost.stone * 0.4 * plot.level);
       const refundClay = Math.round((cfg.cost.clay ?? 0) * 0.4 * plot.level);
+      const newPlots = s.plots.filter((p) => p.id !== plotId);
+      // demolishing a cottage can cut the headcount — trim now-stranded laborers
+      // so the Labor panel never shows more workers than residents
+      let labor = s.labor;
+      const assigned = labor.wood + labor.stone + labor.clay;
+      const pop = deriveResidents(newPlots).length;
+      if (assigned > pop) {
+        labor = { ...labor };
+        let over = assigned - pop;
+        for (const r of ['clay', 'stone', 'wood'] as const) {
+          if (over <= 0) break;
+          const cut = Math.min(labor[r], over);
+          labor[r] -= cut;
+          over -= cut;
+        }
+      }
       set({
-        plots: s.plots.filter((p) => p.id !== plotId),
+        plots: newPlots,
         wood: s.wood + refundWood,
         stone: s.stone + refundStone,
         clay: s.clay + refundClay,
+        labor,
         panel: null,
         selectedPlot: null,
       });
@@ -1469,7 +1511,18 @@ export const useGame = create<GameState>((set, get) => {
     buyResource: (type, amount) => {
       const s = get();
       const buyDiscount = 1 - (s.skills.haggle ?? 0) * HAGGLE_BUY_PER_PT;
-      const cost = Math.ceil(s.marketPrices[type] * MARKET_SPREAD * amount * buyDiscount);
+      // The house must always win the round-trip: never let the ask fall to or
+      // below what selling the same amount straight back would fetch. Haggling
+      // (+sell, −buy) and Rector's selling boon could otherwise overpower the
+      // spread and turn buy-then-sell into a money printer.
+      const sellMult = (1 + (s.skills.haggle ?? 0) * HAGGLE_SELL_PER_PT) * boonMarketMult(s.quests);
+      const sellBack = Math.floor(s.marketPrices[type] * amount * sellMult);
+      // never below sell-back + 1, so a round trip is always a (small) loss;
+      // for normal players the 1.25 spread dominates and this never binds
+      const cost = Math.max(
+        Math.ceil(s.marketPrices[type] * MARKET_SPREAD * amount * buyDiscount),
+        sellBack + 1
+      );
       if (s.bswx < cost) {
         get().addToast('Not enough BSWX for that purchase.', 'warn', '!');
         return;
@@ -1717,9 +1770,8 @@ export const useGame = create<GameState>((set, get) => {
         set({ speculatorOffer: null, panel: null });
         return;
       }
-      const plots = s.plots.map((p) =>
-        p.id === offer.plotId ? { ...p, building: null, level: 0, construction: 0 } : p
-      );
+      // remove the sold plot outright (don't leave a phantom null-building plot)
+      const plots = s.plots.filter((p) => p.id !== offer.plotId);
       set({
         plots,
         bswx: s.bswx + offer.amount,
@@ -2133,9 +2185,27 @@ export const useGame = create<GameState>((set, get) => {
     const loan = s.loan;
     if (!loan) return;
     if (newDay > loan.dueDay) {
-      const owed = Math.round(loan.owed * LOAN_OVERDUE_GROWTH);
-      set({ loan: { ...loan, owed, overdue: true }, reputation: Math.max(0, s.reputation - 2) });
-      get().addToast(`Overdue! The shark's debt swells to ◆${owed}. (−2 rep)`, 'warn', '⚠');
+      let owed = Math.round(loan.owed * LOAN_OVERDUE_GROWTH);
+      // the shark doesn't just wait — his men help themselves to a quarter of
+      // your purse each overdue dawn, so an unpaid loan can never be ignored
+      // into free money (a broke player loses nothing and is never soft-locked)
+      const grab = Math.min(owed, Math.floor(s.bswx * 0.25));
+      owed -= grab;
+      const reputation = Math.max(0, s.reputation - 2);
+      if (owed <= 0) {
+        set({ loan: null, bswx: s.bswx - grab, reputation });
+        get().addToast(`The shark's men emptied your pockets — debt settled the hard way. (−2 rep)`, 'warn', '⚠');
+        checkReputationObjectives();
+      } else {
+        set({ loan: { ...loan, owed, overdue: true }, bswx: s.bswx - grab, reputation });
+        get().addToast(
+          grab > 0
+            ? `Overdue! The shark seizes ◆${grab}; the debt swells to ◆${owed}. (−2 rep)`
+            : `Overdue! The shark's debt swells to ◆${owed}. (−2 rep)`,
+          'warn',
+          '⚠'
+        );
+      }
     }
   }
 
@@ -2232,7 +2302,7 @@ function loadSave(): Partial<GameState> | null {
     // default rotation for saves from before free placement existed
     const plots = ((data.plots ?? []) as Plot[])
       .filter((p) => p.building)
-      .map((p) => ({ ...p, rot: p.rot ?? 0 }));
+      .map((p) => ({ ...p, level: p.level ?? 1, construction: p.construction ?? 0, rot: p.rot ?? 0 }));
     const circulation = data.circulation ?? 1;
     const legacy: LegacyState = data.legacy ?? { tokens: 0, district: 1 };
     const civics: Civics = { ...emptyCivics(), ...(data.civics ?? {}) };
