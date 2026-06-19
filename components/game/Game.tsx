@@ -6,6 +6,7 @@ import MainMenu from './MainMenu';
 import CharacterCreator from './CharacterCreator';
 import HUD from './ui/HUD';
 import Panels from './ui/Panels';
+import { useCoarse } from './ui/useCoarse';
 import { useGame } from '../../src/game/store';
 import { audio } from '../../src/game/audio';
 import { MUSIC } from '../../src/game/data';
@@ -75,6 +76,11 @@ export default function Game() {
 
 function MenuButton() {
   const backToMenu = useGame((s) => s.backToMenu);
+  const coarse = useCoarse();
+  // On touch, Save & Quit lives in the BottomNav ☰ menu; this desktop corner
+  // button must not reappear (it's pointer-gated, not width-gated, so it can't
+  // collide with the tab bar on a tablet or a phone in landscape).
+  if (coarse) return null;
   return (
     <button
       onClick={backToMenu}

@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { BANK_LOAN_TIERS, useGame } from '../../../src/game/store';
+import { useCoarse } from './useCoarse';
 import {
   adjacencyInfo,
   boonActive,
@@ -52,10 +53,16 @@ export default function Panels() {
 
 function Modal({ title, children }: { title: string; children: React.ReactNode }) {
   const setPanel = useGame((s) => s.setPanel);
-  return (
+  const coarse = useCoarse();
+  const close = () => setPanel(null);
+  return coarse ? (
+    <BottomSheet title={title} onClose={close}>
+      {children}
+    </BottomSheet>
+  ) : (
     <div
       className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 p-3 backdrop-blur-[2px]"
-      onClick={() => setPanel(null)}
+      onClick={close}
     >
       <div
         className="flex max-h-[82vh] w-full max-w-md flex-col overflow-hidden rounded-2xl border border-amber-200/20 bg-[#161310]/95 shadow-2xl"
@@ -64,13 +71,77 @@ function Modal({ title, children }: { title: string; children: React.ReactNode }
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
           <h2 className="text-sm font-bold uppercase tracking-widest text-amber-300">{title}</h2>
           <button
-            onClick={() => setPanel(null)}
+            onClick={close}
             className="rounded-md px-2 py-0.5 text-white/60 transition hover:bg-white/10 hover:text-white"
           >
             ✕
           </button>
         </div>
         <div className="overflow-y-auto p-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// Mobile panels render as a bottom-sheet: full-width, bottom-anchored, a
+// grab handle you can drag down to dismiss, scrollable body, and a sticky
+// thumb-zone Done button. Same children as the desktop modal — only the
+// wrapper changes, so no panel content or store wiring moves.
+function BottomSheet({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const [drag, setDrag] = useState(0);
+  const startY = useRef<number | null>(null);
+
+  return (
+    <div className="absolute inset-0 z-20 flex flex-col justify-end bg-black/55 backdrop-blur-[2px]" onClick={onClose}>
+      <div
+        className="animate-sheetUp flex max-h-[88vh] w-full flex-col overflow-hidden rounded-t-3xl border-t border-amber-200/25 bg-[#161310]/97 shadow-2xl"
+        style={drag ? { transform: `translateY(${drag}px)` } : undefined}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* grab handle — drag down past a threshold to dismiss */}
+        <div
+          className="flex shrink-0 cursor-grab touch-none flex-col items-center pt-2.5 active:cursor-grabbing"
+          onPointerDown={(e) => {
+            startY.current = e.clientY;
+            try {
+              (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+            } catch {
+              /* capture is a nicety; drag math uses clientY regardless */
+            }
+          }}
+          onPointerMove={(e) => {
+            if (startY.current !== null) setDrag(Math.max(0, e.clientY - startY.current));
+          }}
+          onPointerUp={() => {
+            if (drag > 90) onClose();
+            else setDrag(0);
+            startY.current = null;
+          }}
+          onPointerCancel={() => {
+            setDrag(0);
+            startY.current = null;
+          }}
+        >
+          <div className="h-1.5 w-11 rounded-full bg-white/25" />
+          <h2 className="mt-2 px-4 text-center text-xs font-bold uppercase tracking-widest text-amber-300">{title}</h2>
+        </div>
+        <div className="no-scrollbar flex-1 overflow-y-auto overscroll-contain px-4 pb-2 pt-2">{children}</div>
+        <div className="safe-pb shrink-0 border-t border-white/10 p-3">
+          <button
+            onClick={onClose}
+            className="w-full rounded-2xl border border-white/15 bg-white/5 py-3 text-sm font-bold text-white/85 transition active:scale-[0.98]"
+          >
+            Done
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -165,10 +236,10 @@ function RewardLine({ def }: { def: QuestDef }) {
 function Inventory() {
   const s = useGame();
   const items = [
-    { icon: '🪵', name: 'Lumber', count: s.wood, desc: 'Harvested from the northern pines.' },
-    { icon: '🪨', name: 'Stone', count: s.stone, desc: 'Quarried east of the river.' },
-    { icon: '🧱', name: 'Clay', count: s.clay, desc: 'Dug from the southern riverbank.' },
-    { icon: '◆', name: 'BSWX', count: s.bswx, desc: 'Black Wall Street Exchange currency.' },
+    { icon: '🪵', name: 'Lumber', count: s.wood },
+    { icon: '🪨', name: 'Stone', count: s.stone },
+    { icon: '🧱', name: 'Clay', count: s.clay },
+    { icon: '◆', name: 'BSWX', count: s.bswx },
   ];
   const built = s.plots.filter((p) => p.building && p.construction === 0);
   const income = built.reduce((sum, p) => sum + BUILDINGS[p.building!].income * p.level, 0);
@@ -185,7 +256,6 @@ function Inventory() {
                 <div className="text-sm font-bold text-amber-300">{it.count.toLocaleString()}</div>
               </div>
             </div>
-            <div className="mt-1 text-[10px] text-white/45">{it.desc}</div>
           </div>
         ))}
       </div>
@@ -198,7 +268,7 @@ function Inventory() {
           <Row k="Stamina" v={`${Math.round(s.stamina)} / ${s.staminaMax}`} />
           <Row k="Total earned" v={`◆${s.totalEarned.toLocaleString()}`} />
           <Row k="Buildings" v={`${built.length}`} />
-          <Row k="Passive income" v={`◆${income} / 5s (before bonuses)`} />
+          <Row k="Passive income" v={`◆${income} / 5s`} />
           <Row k="Harvest bonus" v={`+${Math.floor((s.level - 1) / 2)} per swing`} />
           <Row k="District" v={`${s.legacy.district}`} />
           {s.legacy.tokens > 0 && (
@@ -303,9 +373,6 @@ function BoonsSection() {
   return (
     <div>
       <h3 className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-white/50">Founder Boons</h3>
-      <p className="mb-2 text-[11px] leading-relaxed text-white/55">
-        As each founder joins New Greenwood, they lend their gift to the whole town — forever.
-      </p>
       <div className="space-y-1.5">
         {FOUNDER_BOONS.map((b) => {
           const active = boonActive(b.npc, quests);
@@ -390,7 +457,7 @@ function BuildMenu() {
             onClick={() => s.setPanel('bank')}
             className="w-full rounded-lg border border-sky-400/40 bg-sky-500/10 px-3 py-2 text-[11px] font-bold text-sky-200 transition hover:bg-sky-500/20"
           >
-            🏦 Bank Services — savings &amp; fair loans
+            🏦 Bank Services
           </button>
         )}
         {plot.building === 'cultural_hall' && (
@@ -431,7 +498,7 @@ function BuildMenu() {
           onClick={() => s.demolishPlot(plot.id)}
           className="w-full rounded-lg border border-red-400/40 bg-red-500/10 px-3 py-2 text-[11px] font-bold text-red-200 transition hover:bg-red-500/20"
         >
-          Demolish &amp; relocate (salvage ~40% materials)
+          Demolish (refund ~40%)
         </button>
       </div>
     );
@@ -442,8 +509,7 @@ function BuildMenu() {
   if (!unlocked) {
     return (
       <div className="text-xs text-white/60">
-        Complete <span className="font-semibold text-amber-300">First Foundations</span> for O.W. Gurley before the land
-        office will let you build.
+        Complete <span className="font-semibold text-amber-300">First Foundations</span> to unlock building.
       </div>
     );
   }
@@ -451,9 +517,7 @@ function BuildMenu() {
   return (
     <div className="space-y-2">
       <p className="text-[11px] leading-relaxed text-white/55">
-        Pick a building, then aim it on the grid around the plaza — <b>mouse/tap</b> to position, <b>R</b> to rotate,{' '}
-        <b>Place</b> to build. Set complementary buildings side-by-side for a <b className="text-amber-300">synergy</b>{' '}
-        income bonus — green rings light up the good neighbors as you aim.
+        Place complementary buildings side-by-side for a <b className="text-amber-300">synergy</b> income bonus.
       </p>
       {Object.values(BUILDINGS).map((cfg) => {
         const repOk = s.reputation >= cfg.repRequired;
@@ -515,18 +579,14 @@ function MarketPanel() {
   if (!hasGrocery) {
     return (
       <div className="text-xs leading-relaxed text-white/60">
-        The exchange opens once Greenwood has a <span className="font-semibold text-amber-300">Grocery</span> to anchor
-        trade. Build one near the plaza, then come back with your harvest.
+        Build a <span className="font-semibold text-amber-300">Grocery</span> to open the exchange.
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      <p className="text-[11px] leading-relaxed text-white/55">
-        Prices drift with every tick of the exchange. Sell high, buy what your build needs — every trade keeps the
-        dollar inside Greenwood.
-      </p>
+      <p className="text-[11px] leading-relaxed text-white/55">Prices drift each tick. Sell high, buy low.</p>
       {MARKET_ROWS.map(({ type, icon, name, buyable }) => {
         const have = Math.floor(type === 'goods' ? s.goods : s[type]);
         const price = s.marketPrices[type];
@@ -588,10 +648,7 @@ function Provisions() {
   const full = s.stamina >= s.staminaMax;
   return (
     <div className="border-t border-white/10 pt-3">
-      <h3 className="mb-1 text-[10px] font-bold uppercase tracking-widest text-white/50">Provisions</h3>
-      <p className="mb-2 text-[11px] leading-relaxed text-white/55">
-        Grab a bite to refill stamina instantly — no waiting around to get back to work.
-      </p>
+      <h3 className="mb-2 text-[10px] font-bold uppercase tracking-widest text-white/50">Provisions</h3>
       <div className="space-y-2">
         {PROVISIONS.map((p) => {
           const available = !p.requires || s.plots.some((pl) => pl.building === p.requires && pl.construction === 0);
@@ -631,13 +688,11 @@ function MerchantPanel() {
   return (
     <div className="space-y-3">
       <p className="text-[11px] leading-relaxed text-white/60">
-        <span className="font-semibold text-white">{m.name}</span> deals in mystery crates. One is a{' '}
-        <b className="text-emerald-300">steal</b>, one is <b>fair</b>, and one is pure{' '}
-        <b className="text-red-300">snake oil</b> — but they&apos;re face-down. Inspect one for free, then gamble on the
-        rest. <span className="text-white/40">({trustLabel})</span>
+        <span className="font-semibold text-white">{m.name}</span> brought mystery crates — one steal, one fair, one
+        snake oil. Inspect one free, then gamble. <span className="text-white/40">({trustLabel})</span>
       </p>
       <div className="text-[10px] text-white/45">
-        Free inspections left: <span className="font-bold text-amber-300">{m.inspectsLeft}</span>
+        Inspects left: <span className="font-bold text-amber-300">{m.inspectsLeft}</span>
       </div>
       <div className="space-y-2">
         {m.deals.map((d) => {
@@ -728,8 +783,7 @@ function LoanPanel() {
           </button>
         </div>
         <p className="text-[11px] leading-relaxed text-white/50">
-          Clear it before the due day. Miss it and the debt swells each dawn — and the street notices (your reputation
-          falls).
+          Miss the due day and the debt grows each dawn — and your reputation falls.
         </p>
       </div>
     );
@@ -737,8 +791,7 @@ function LoanPanel() {
   return (
     <div className="space-y-3">
       <p className="text-[11px] leading-relaxed text-white/60">
-        Quick BSWX, no questions asked — but the shark always takes his cut. Borrow to leap ahead, then repay before the
-        due day or the debt grows.
+        Fast BSWX at steep rates. Repay before the due day or the debt grows.
       </p>
       <div className="space-y-2">
         {LOAN_TIERS.map((t, i) => {
@@ -770,8 +823,8 @@ function SpeculatorPanel() {
     <div className="space-y-3 text-center">
       <div className="text-3xl">🎩</div>
       <p className="text-xs leading-relaxed text-white/75">
-        A slick outside investor wants to buy your <b className="text-fuchsia-300">{offer.buildingName}</b>. Quick cash
-        today — but the income, the jobs it holds, and a piece of Greenwood go with it.
+        An investor wants your <b className="text-fuchsia-300">{offer.buildingName}</b>. Cash now — but you lose its
+        income and a piece of Greenwood.
       </p>
       <div className="rounded-xl border border-fuchsia-400/30 bg-fuchsia-400/10 py-3">
         <div className="text-[10px] uppercase tracking-wider text-fuchsia-200/70">Their Offer</div>
@@ -801,20 +854,17 @@ function BoardPanel() {
   return (
     <div className="space-y-3">
       <p className="text-[11px] leading-relaxed text-white/55">
-        Neighbors post what they need. Lend a hand for BSWX, reputation, and their friendship 💛.
+        Help neighbors for BSWX, rep, and friendship 💛.
         {friends > 0 && (
           <>
             {' '}
             You have <span className="font-semibold text-amber-200">{friends}</span> close{' '}
-            {friends === 1 ? 'friend' : 'friends'} in Greenwood.
+            {friends === 1 ? 'friend' : 'friends'} so far.
           </>
         )}
       </p>
       {s.requests.length === 0 ? (
-        <div className="text-xs text-white/50">
-          The board is quiet for now. Residents post requests as the town grows — build cottages to bring more
-          neighbors.
-        </div>
+        <div className="text-xs text-white/50">Quiet for now. Build cottages to draw neighbors.</div>
       ) : (
         <div className="space-y-2">
           {s.requests.map((r) => {
@@ -874,7 +924,7 @@ function BankPanel() {
           <span className="text-lg font-extrabold text-sky-200">◆{Math.floor(s.savings).toLocaleString()}</span>
         </div>
         <div className="mt-0.5 text-[10px] text-white/55">
-          {hasBank ? `Earns ${Math.round(rate * 100)}% interest every dawn.` : 'Build & operate a bank to earn interest on deposits.'}
+          {hasBank ? `Earns ${Math.round(rate * 100)}% interest every dawn.` : 'Build a bank to earn interest.'}
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {[50, 100].map((a) => (
@@ -918,9 +968,6 @@ function BankPanel() {
           <div className="text-[11px] text-white/50">Operate a bank to borrow on fair, honest terms.</div>
         ) : (
           <div className="space-y-2">
-            <p className="text-[11px] leading-relaxed text-white/55">
-              Honest rates — far gentler than the back-alley shark.
-            </p>
             {BANK_LOAN_TIERS.map((t, i) => {
               const owed = Math.round(t.principal * (1 + t.rate));
               return (
@@ -955,8 +1002,7 @@ function LaborPanel() {
   if (population === 0) {
     return (
       <div className="text-xs leading-relaxed text-white/60">
-        Build <span className="font-semibold text-amber-300">cottages</span> to bring residents you can hire as
-        laborers.
+        Build <span className="font-semibold text-amber-300">cottages</span> to gain laborers.
       </div>
     );
   }
@@ -966,8 +1012,7 @@ function LaborPanel() {
   return (
     <div className="space-y-3">
       <p className="text-[11px] leading-relaxed text-white/55">
-        Put your neighbors to work gathering materials every tick. They&apos;re paid the <b>market rate</b> (no markup) —
-        cheaper than buying, and it spares you the trip out to harvest.
+        Assign neighbors to gather materials each tick at the <b>market rate</b>.
       </p>
       <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px]">
         <span className="text-white/70">
@@ -1016,10 +1061,7 @@ function CivicPanel() {
   const s = useGame();
   return (
     <div className="space-y-3">
-      <p className="text-[11px] leading-relaxed text-white/55">
-        Pool the community&apos;s BSWX into improvements that lift the whole district — permanent, and they carry across
-        every level you build.
-      </p>
+      <p className="text-[11px] leading-relaxed text-white/55">Permanent, district-wide upgrades.</p>
       <div className="space-y-2">
         {CIVICS.map((def) => {
           const lvl = s.civics[def.id] ?? 0;
@@ -1076,9 +1118,7 @@ function CharterPanel() {
     <div className="space-y-3 text-center">
       <div className="text-3xl">🏙️</div>
       <p className="text-xs leading-relaxed text-white/75">
-        Greenwood stands restored. Charter a <b className="text-amber-200">new district</b> to begin again on fresh
-        ground — your buildings and wealth reset, but your <b>Legacy</b> carries forward as a permanent boost to all
-        income, forever.
+        Reset your town for a permanent <b className="text-amber-200">Legacy</b> boost to all income — forever.
       </p>
       <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 py-3">
         <div className="text-[10px] uppercase tracking-wider text-amber-200/70">Legacy after chartering</div>
@@ -1098,7 +1138,7 @@ function CharterPanel() {
         </button>
       ) : (
         <div className="text-[11px] text-white/50">
-          Complete the founding story (<span className="text-amber-300">A Legacy Restored</span>) to unlock chartering.
+          Finish <span className="text-amber-300">A Legacy Restored</span> to unlock.
         </div>
       )}
     </div>
@@ -1152,136 +1192,67 @@ function MapPanel() {
 function HelpPanel() {
   const unstuck = useGame((s) => s.unstuck);
   const setPanel = useGame((s) => s.setPanel);
+  const coarse = useCoarse();
+
+  const rows: [React.ReactNode, string][] = coarse
+    ? [
+        ['🕹️ Move', 'Left-thumb stick, or tap the ground'],
+        ['💨 Sprint', 'Toggle — faster, burns stamina'],
+        ['✊ Act', 'Harvest, talk, trade, manage'],
+        ['🤏 Zoom', 'Pinch with two fingers'],
+        ['▾ Tabs', 'Build · Quests · Items · Market · Map'],
+      ]
+    : [
+        [
+          <>
+            <Kbd>WASD</Kbd> / click
+          </>,
+          'Move · hold Shift to sprint',
+        ],
+        [<Kbd>E</Kbd>, 'Interact — harvest, talk, manage'],
+        [<Kbd>B</Kbd>, 'Build — place, R to rotate'],
+        [<Kbd>Q</Kbd>, 'Quests'],
+        [<Kbd>I</Kbd>, 'Inventory, skills & boons'],
+        [<Kbd>T</Kbd>, 'Market & provisions'],
+        [<Kbd>M</Kbd>, 'Map & fast-travel'],
+      ];
 
   return (
-    <div className="space-y-3 text-xs text-white/80">
-      <Section h="Goal">
-        Rebuild New Greenwood — gather resources, raise businesses, and grow community wealth and reputation. Follow the
-        main quests from O.W. Gurley to restore the district to glory.
-      </Section>
-      <Section h="Movement">
-        <Kbd>WASD</Kbd> or arrow keys to walk. You can also <b>click / tap the ground</b> to move there. Mouse wheel
-        zooms the camera. Hold <Kbd>Shift</Kbd> to <b>sprint</b> — quicker on your feet, but it burns stamina faster.
-        Open the <Kbd>M</Kbd> Map to <b>fast-travel</b> to the plaza or any of your buildings.
-      </Section>
-      <Section h="Interacting">
-        Walk up to anything highlighted with a golden ring and press <Kbd>E</Kbd> (or tap the action button on mobile):
-        chop pines 🌲, mine quarry rock 🪨, dig riverbank clay 🧱, talk to townsfolk, or manage a building.
-      </Section>
-      <Section h="Stamina">
-        Working <b>and walking</b> both burn stamina (the green STA bar). Run it dry and you&apos;ll trudge until you
-        recover — stand still to catch your breath (faster after dark) or grab a <b>provision</b> 🍞/🥧 at the Exchange
-        for an instant refill. Plan your routes; don&apos;t sprint clear across the district on an empty tank.
-      </Section>
-      <Section h="Building & Placement">
-        Press <Kbd>B</Kbd> (or the Build button) to open the Land Office, choose a building, then place it{' '}
-        <b>anywhere</b> on the grid around the plaza — move the mouse / tap to position, <Kbd>R</Kbd> to rotate, and{' '}
-        <Kbd>E</Kbd> or <b>Place</b> to build (green = clear, red = blocked, e.g. water or another building). Walk up to
-        a finished building and press <Kbd>E</Kbd> to upgrade, <b>rotate</b> it 90°, or demolish &amp; relocate it.
-      </Section>
-      <Section h="Neighbor Synergies">
-        <b>Where</b> you build matters. Put complementary buildings next to each other — a grocery beside cottages, a
-        hotel beside the Cultural Hall, gardens around the homes — and each earns a <b>synergy</b> income bonus (up to
-        +50%). While placing, green rings highlight the neighbors you&apos;d pair with, and the readout shows the bonus
-        for the spot you&apos;re aiming at. Check any building&apos;s synergy by walking up and pressing <Kbd>E</Kbd>.
-      </Section>
-      <Section h="The Circulation Economy">
-        Greenwood prospers when the dollar stays home. <b>Gardens</b> grow 🌾 food; <b>cottages</b> bring residents who
-        eat it (a fed town earns more, a hungry one falters); the <b>grocery</b> sells the surplus; the{' '}
-        <b>workshop</b> crafts 📦 goods from spare lumber; the <b>Sugar Bowl, hotel, and Cultural Hall</b> sell those
-        goods. Every active link raises your <b>⟳ circulation multiplier</b> — and employed residents raise it further.
-      </Section>
-      <Section h="The Exchange & Provisions">
-        Press <Kbd>T</Kbd> at any time (once a grocery is built) to trade lumber, stone, clay, and goods at prices that
-        drift every tick. Sell high, buy what the next build needs — and grab a <b>provision</b> (🍞/🥧) to instantly
-        refill stamina so you never stand around resting.
-      </Section>
-      <Section h="Rushes & Rich Finds">
-        Keep an eye out for golden <b>⚡ beacons</b> that appear around town — run over and press <Kbd>E</Kbd> before the
-        timer runs out for an instant windfall of BSWX or resources. Harvesting the same way for a while builds a
-        <b> combo</b> that boosts your chance of a <b>RICH VEIN</b> crit (double yield). And whatever your businesses earn
-        while you&apos;re away is waiting for you when you return.
-      </Section>
-      <Section h="Strangers in Town">
-        <b>🛒 The Traveling Merchant</b> rolls in with face-down mystery crates — one steal, one fair, one snake-oil.
-        Inspect one free, then gamble. The <b>🪙 Loan Shark</b> (booth east of the plaza) lends fast BSWX at steep
-        interest — repay before the due day or the debt grows and your reputation drops. And the <b>🎩 Speculator</b>
-        will offer big money for your businesses: sell out for quick cash and lost reputation, or refuse and keep
-        Greenwood whole.
-      </Section>
-      <Section h="Day &amp; Night">
-        The clock matters. <b>By day</b> the groceries, workshop and bank do their best trade; <b>after dark</b> those
-        quiet down while the <b>hotel, Sugar Bowl and Cultural Hall</b> come alive — so a well-rounded town earns around
-        the clock. Gardens only grow food in daylight, you rest faster at night, and a certain <b>🎩 speculator</b> only
-        prowls for businesses to buy once the sun is down.
-      </Section>
-      <Section h="Fortunes & Hard Times">
-        The town&apos;s luck swings: <b>🎉 Festivals</b> and <b>📈 booms</b> lift your income, while a <b>📉 Panic</b> or{' '}
-        <b>🥀 Blight</b> (the screen reddens) cuts it or stops your gardens. Keep a buffer of food and BSWX so the bad
-        spells can&apos;t sink you.
-      </Section>
-      <Section h="Quests & Townsfolk">
-        Blue markers = new quests. Gold markers = ready to turn in. Press <Kbd>Q</Kbd> for the quest log,{' '}
-        <Kbd>I</Kbd> for inventory, <Kbd>M</Kbd> for the map. The <b>founders arrive one at a time</b> as you complete
-        the main story — each shows up with their name floating above them, ready to teach you the next part of the game.
-        They keep their own hours too: catch them at their posts by day; after hours they head into their huts and
-        vanish until morning, so plan your errands around the clock.
-      </Section>
-      <Section h="Skills &amp; Founder Boons">
-        Every level grants a <b>★ skill point</b> — spend it in your <Kbd>I</Kbd> Inventory across <b>Vigor</b> (stamina),{' '}
-        <b>Labor</b> (harvest), <b>Haggling</b> (trade) and <b>Stride</b> (speed) to sharpen your own craft. And as each
-        founder joins New Greenwood, their <b>Boon</b> lends a permanent town-wide bonus — more income, better prices,
-        faster building, extra XP. Both live in the Inventory.
-      </Section>
-      <Section h="Town Improvements">
-        Pool BSWX into civic upgrades from your <Kbd>I</Kbd> Inventory (<b>🏛️ Town Improvements</b>): <b>paved roads</b>{' '}
-        (move faster), <b>street lamps</b> (more night income), a <b>school</b> (more XP), <b>waterworks</b> (more food),
-        and a <b>chamber of commerce</b> (more income). They&apos;re permanent and a great place to spend a fat treasury.
-      </Section>
-      <Section h="Hired Laborers">
-        Once cottages bring residents, open the <b>👷 Labor Office</b> from your <Kbd>I</Kbd> Inventory and assign them
-        to gather lumber, stone, or clay each tick. They&apos;re paid the market rate (cheaper than buying, no trip
-        required), so as your town grows you can trade BSWX for a steady flow of materials instead of harvesting every
-        load by hand.
-      </Section>
-      <Section h="Banking &amp; Festivals">
-        Walk up to your <b>Bank</b> and open <b>Bank Services</b> to deposit savings (they earn interest every dawn) or
-        borrow at fair rates — a world apart from the loan shark. At the <b>Cultural Hall</b>, spend BSWX to{' '}
-        <b>host a festival</b> for a burst of income and reputation (with a cooldown between celebrations).
-      </Section>
-      <Section h="Town Goals">
-        Beyond the story, there&apos;s always a <b>🎯 Town Goal</b> on screen — grow your population, reputation, and
-        earnings. Reach one and the next, bigger goal appears. Greenwood never stops growing.
-      </Section>
-      <Section h="Community & Legacy">
-        Help neighbors at the <b>📋 Community Board</b> by the plaza — fulfill their requests for BSWX, reputation, and
-        friendship 💛. Once you finish the founding story, open your <b>Inventory</b> to{' '}
-        <b>🏙️ Charter a New District</b>: reset the town for permanent <b>Legacy</b> income bonuses that stack with every
-        district you build.
-      </Section>
-      <Section h="Saving">Your progress autosaves every few seconds and when you return to the menu.</Section>
-      <div className="pt-2.5 border-t border-white/10">
-        <h3 className="mb-1 text-[10px] font-bold uppercase tracking-widest text-amber-300">Stuck?</h3>
-        <p className="leading-relaxed mb-2 text-white/70">If your character is stuck inside a building and cannot move, click the button below to teleport to the safe town plaza square.</p>
+    <div className="space-y-4 text-xs text-white/80">
+      <div>
+        <h3 className="mb-1 text-[10px] font-bold uppercase tracking-widest text-amber-300">Goal</h3>
+        <p className="leading-relaxed text-white/70">
+          Harvest, build, and trade to grow Greenwood&apos;s wealth. Follow O.W. Gurley&apos;s quests to restore the
+          district.
+        </p>
+      </div>
+      <div>
+        <h3 className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-amber-300">Controls</h3>
+        <div className="space-y-1.5">
+          {rows.map(([k, v], i) => (
+            <div key={i} className="flex items-baseline gap-3">
+              <span className="flex min-w-[92px] shrink-0 items-center gap-1.5 font-semibold text-white/90">{k}</span>
+              <span className="text-white/60">{v}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="text-[11px] leading-relaxed text-white/45">
+        Founders arrive as you finish main quests · blue marker = new quest, gold = ready to turn in · your town
+        autosaves.
+      </p>
+      <div className="border-t border-white/10 pt-3">
+        <p className="mb-2 text-[11px] text-white/60">Stuck inside a building? Teleport to the town square.</p>
         <button
           onClick={() => {
             unstuck();
             setPanel(null);
           }}
-          className="w-full rounded-xl border border-amber-400/50 bg-amber-400/15 py-2.5 text-center text-xs font-bold text-amber-100 shadow-md hover:bg-amber-400/25 active:scale-95 transition"
+          className="w-full rounded-xl border border-amber-400/50 bg-amber-400/15 py-2.5 text-center text-xs font-bold text-amber-100 shadow-md transition hover:bg-amber-400/25 active:scale-95"
         >
           🛟 Teleport to Town Square
         </button>
       </div>
-    </div>
-  );
-}
-
-function Section({ h, children }: { h: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <h3 className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-amber-300">{h}</h3>
-      <p className="leading-relaxed">{children}</p>
     </div>
   );
 }
