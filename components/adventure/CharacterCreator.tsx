@@ -133,7 +133,7 @@ export default function CharacterCreator({ initial, onConfirm, onBack }: Props) 
             />
             <button
               onClick={rotate}
-              className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-lg border border-amber-200/20 bg-black/50 text-sm text-amber-100/80 transition hover:bg-black/70"
+              className="absolute bottom-2 right-2 flex h-11 w-11 items-center justify-center rounded-lg border border-amber-200/20 bg-black/50 text-base text-amber-100/80 transition hover:bg-black/70"
               title="Rotate"
             >
               ⟳
@@ -165,7 +165,7 @@ export default function CharacterCreator({ initial, onConfirm, onBack }: Props) 
                   advAudio.sfx('ui');
                   setTab(t);
                 }}
-                className={`shrink-0 rounded-lg px-3.5 py-2 text-xs font-bold transition ${
+                className={`min-h-11 shrink-0 rounded-lg px-3.5 py-2.5 text-xs font-bold transition ${
                   tab === t
                     ? 'bg-amber-400/25 text-amber-100 ring-1 ring-amber-300/40'
                     : 'bg-black/30 text-amber-100/55 hover:bg-black/50'
@@ -250,13 +250,13 @@ function Styles({
   return (
     <div>
       <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200/55">{label}</div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2.5">
         {colors.map((c, i) => (
           <button
             key={i}
             title={c.name}
             onClick={() => onPick(i)}
-            className={`h-8 w-8 rounded-md border transition ${
+            className={`h-11 w-11 rounded-md border transition ${
               value === i ? 'border-amber-200 ring-2 ring-amber-300/60' : 'border-black/40 hover:border-amber-200/40'
             }`}
             style={{ backgroundColor: c.hex }}
@@ -281,12 +281,12 @@ function Names({
   return (
     <div>
       <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200/55">{label}</div>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-2">
         {items.map((it, i) => (
           <button
             key={it.id}
             onClick={() => onPick(i)}
-            className={`rounded-md border px-3 py-1.5 text-xs font-semibold transition ${
+            className={`min-h-11 rounded-md border px-3.5 py-2.5 text-xs font-semibold transition ${
               value === i
                 ? 'border-amber-300/60 bg-amber-400/20 text-amber-100'
                 : 'border-amber-200/15 bg-black/30 text-amber-100/70 hover:bg-black/50'

@@ -36,11 +36,25 @@ function writeSave(s: SaveData) {
   }
 }
 
+// Single source of truth for "is this a touch device" — drives every
+// mobile-vs-desktop behavior split (controls, key hints, sheet overlays).
+// We deliberately do NOT use Tailwind `sm:` width breakpoints for this:
+// a narrow desktop window is not a phone, and a wide tablet still is one.
+// SSR-safe: false on first paint, resolved after mount.
+function useTouch(): boolean {
+  const [touch, setTouch] = useState(false);
+  useEffect(() => {
+    setTouch(window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window);
+  }, []);
+  return touch;
+}
+
 export default function AdventureGame() {
   const [phase, setPhase] = useState<Phase>('menu');
   const [save, setSave] = useState<SaveData | null>(null);
   const [appearance, setAppearance] = useState<Appearance>(DEFAULT_APPEARANCE);
   const [usingSave, setUsingSave] = useState(false);
+  const touch = useTouch();
 
   const [snap, setSnap] = useState<EngineSnapshot | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -169,10 +183,10 @@ export default function AdventureGame() {
               {snap.embers}
               {snap.keys > 0 && <span className="ml-1 text-amber-200/80">🔑 {snap.keys}</span>}
             </div>
-            <div className="pointer-events-auto flex gap-1.5">
-              <HudBtn onClick={() => setShowJournal(true)} label="📖" />
-              <HudBtn onClick={toggleMute} label={muted ? '🔇' : '🔊'} />
-              <HudBtn onClick={togglePause} label="⏸" />
+            <div className={`pointer-events-auto flex ${touch ? 'gap-2.5' : 'gap-1.5'}`}>
+              <HudBtn onClick={() => setShowJournal(true)} label="📖" touch={touch} />
+              {!touch && <HudBtn onClick={toggleMute} label={muted ? '🔇' : '🔊'} touch={touch} />}
+              <HudBtn onClick={togglePause} label="⏸" touch={touch} />
             </div>
           </div>
         </div>
@@ -180,9 +194,13 @@ export default function AdventureGame() {
 
       {/* zone banner + objective */}
       {snap && (
-        <div className="pointer-events-none absolute left-1/2 top-2 z-10 flex max-w-[70%] -translate-x-1/2 flex-col items-center text-center safe-pt">
+        <div
+          className={`pointer-events-none absolute left-1/2 top-2 z-10 flex -translate-x-1/2 flex-col items-center text-center safe-pt ${
+            touch ? 'max-w-[55vw]' : 'max-w-[70%]'
+          }`}
+        >
           <div className="font-retro text-[10px] tracking-wider text-amber-200/70 drop-shadow">{snap.mapName}</div>
-          <div className="mt-1 truncate text-[10px] text-amber-100/55">◇ {snap.objective}</div>
+          {!touch && <div className="mt-1 truncate text-[10px] text-amber-100/55">◇ {snap.objective}</div>}
         </div>
       )}
 
@@ -203,9 +221,13 @@ export default function AdventureGame() {
 
       {/* interaction prompt */}
       {snap?.prompt && !snap.dialog && (
-        <div className="pointer-events-none absolute bottom-28 left-1/2 z-10 -translate-x-1/2 sm:bottom-20">
+        <div
+          className={`pointer-events-none absolute z-10 -translate-x-1/2 ${
+            touch ? 'bottom-44 left-[58%]' : 'bottom-20 left-1/2'
+          }`}
+        >
           <div className="rounded-full border border-amber-200/25 bg-black/65 px-4 py-1.5 text-xs font-semibold text-amber-100 backdrop-blur-sm">
-            <span className="hidden sm:inline">[E] </span>
+            {!touch && '[E] '}
             {snap.prompt}
           </div>
         </div>
@@ -223,14 +245,18 @@ export default function AdventureGame() {
             )}
             <div className="text-sm leading-relaxed text-amber-50/90">{snap.dialog.text}</div>
             <div className="mt-2 text-right text-[10px] text-amber-200/50">
-              {snap.dialog.index + 1}/{snap.dialog.total} · tap / [E] ▸
+              {snap.dialog.index + 1}/{snap.dialog.total} · {touch ? 'tap' : '[E]'} ▸
             </div>
           </div>
         </button>
       )}
 
-      {/* toasts */}
-      <div className="pointer-events-none absolute left-1/2 top-16 z-20 flex -translate-x-1/2 flex-col items-center gap-1.5">
+      {/* toasts — pushed below the boss bar while a boss is active */}
+      <div
+        className={`pointer-events-none absolute left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-1.5 ${
+          snap?.boss ? 'top-32' : 'top-16'
+        }`}
+      >
         {toasts.map((t) => (
           <div
             key={t.id}
@@ -247,19 +273,25 @@ export default function AdventureGame() {
         ))}
       </div>
 
-      {/* mobile controls */}
-      <MobileControls
-        onMove={(x, y) => engineRef.current?.setMoveAxis(x, y)}
-        onAttack={() => engineRef.current?.pressAttack()}
-        onInteract={() => engineRef.current?.pressInteract()}
-        onDash={() => engineRef.current?.pressDash()}
-        hasPrompt={!!snap?.prompt}
-        canDash={!!snap?.canDash}
-      />
+      {/* mobile controls — hidden during dialogue so the full-width dialog
+          card stays tap-to-advance (the joystick zone would otherwise eat
+          taps in the lower-left; the engine locks movement during dialogue
+          anyway, so there's no gameplay downside) */}
+      {!snap?.dialog && (
+        <MobileControls
+          touch={touch}
+          onMove={(x, y) => engineRef.current?.setMoveAxis(x, y)}
+          onAttack={() => engineRef.current?.pressAttack()}
+          onInteract={() => engineRef.current?.pressInteract()}
+          onDash={() => engineRef.current?.pressDash()}
+          hasPrompt={!!snap?.prompt}
+          canDash={!!snap?.canDash}
+        />
+      )}
 
       {/* pause */}
       {paused && (
-        <Overlay>
+        <Overlay touch={touch}>
           <div className="font-retro text-lg text-amber-200">PAUSED</div>
           <div className="mt-4 flex flex-col gap-2">
             <PanelBtn onClick={togglePause}>▸ Resume</PanelBtn>
@@ -274,18 +306,20 @@ export default function AdventureGame() {
             </PanelBtn>
           </div>
           <div className="mt-5 max-w-xs text-center text-[10px] leading-relaxed text-amber-200/50">
-            Move WASD / arrows · Attack Space · Interact E · Sprint Shift · Dash K · Pause Esc
+            {touch
+              ? 'Joystick move · ⚔ attack · ✋ interact · 🌀 dash'
+              : 'WASD/arrows move · Space attack · E talk · Shift sprint · K dash · Esc pause'}
           </div>
         </Overlay>
       )}
 
       {/* journal */}
       {showJournal && snap && (
-        <Overlay onClose={() => setShowJournal(false)}>
+        <Overlay touch={touch} onClose={() => setShowJournal(false)}>
           <div className="font-retro text-sm text-amber-200">JOURNAL</div>
           <div className="mt-4 w-[300px] max-w-[86vw] space-y-3 text-left">
             <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-amber-200/50">Current Goal</div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-amber-200/50">Goal</div>
               <div className="mt-1 text-sm text-amber-50/90">{snap.objective}</div>
             </div>
             <div>
@@ -316,7 +350,7 @@ export default function AdventureGame() {
 
       {/* shop */}
       {snap?.shop && (
-        <Overlay onClose={() => engineRef.current?.closeShop()}>
+        <Overlay touch={touch} onClose={() => engineRef.current?.closeShop()}>
           <div className="font-retro text-sm text-amber-200">TAMSIN&apos;S WARES</div>
           <div className="mt-1 text-xs text-amber-200/70">✦ {snap.embers} embers</div>
           <div className="mt-4 w-[330px] max-w-[90vw] space-y-2">
@@ -328,7 +362,7 @@ export default function AdventureGame() {
                   key={it.id}
                   disabled={maxed || !afford}
                   onClick={() => engineRef.current?.buyUpgrade(it.id)}
-                  className={`flex w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition ${
+                  className={`flex min-h-12 w-full items-center justify-between gap-3 rounded-xl border px-3 py-2 text-left transition ${
                     maxed
                       ? 'border-amber-200/10 bg-black/30 opacity-50'
                       : afford
@@ -360,7 +394,7 @@ export default function AdventureGame() {
 
       {/* victory */}
       {snap?.won && !winDismissed && (
-        <Overlay>
+        <Overlay touch={touch}>
           <div className="text-3xl">🏮</div>
           <div className="mt-2 font-retro text-base text-amber-200 drop-shadow-[0_2px_10px_rgba(224,113,47,0.6)]">
             LIGHT RESTORED
@@ -416,7 +450,6 @@ function MenuScreen({
       <EmberField />
 
       <div className="relative z-10 flex max-w-lg flex-col items-center px-6 text-center">
-        <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.4em] text-amber-300/70">A Pixel Adventure</div>
         <h1 className="font-retro text-3xl leading-snug text-amber-100 drop-shadow-[0_3px_16px_rgba(224,113,47,0.6)] sm:text-5xl">
           EMBER
           <br />
@@ -527,11 +560,13 @@ function Shards({ shards, names }: { shards: boolean[]; names: string[] }) {
   );
 }
 
-function HudBtn({ onClick, label }: { onClick: () => void; label: string }) {
+function HudBtn({ onClick, label, touch }: { onClick: () => void; label: string; touch?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className="flex h-8 w-8 items-center justify-center rounded-lg border border-amber-200/15 bg-black/45 text-sm text-amber-100/80 backdrop-blur-sm transition hover:bg-black/65"
+      className={`flex items-center justify-center rounded-lg border border-amber-200/15 bg-black/45 text-amber-100/80 backdrop-blur-sm transition hover:bg-black/65 ${
+        touch ? 'h-11 w-11 text-base' : 'h-8 w-8 text-sm'
+      }`}
     >
       {label}
     </button>
@@ -549,7 +584,25 @@ function PanelBtn({ onClick, children }: { onClick: () => void; children: React.
   );
 }
 
-function Overlay({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
+// Centered modal on desktop; bottom-sheet on touch so the CTAs land in the
+// thumb zone instead of mid-screen. Same children either way.
+function Overlay({ children, onClose, touch }: { children: React.ReactNode; onClose?: () => void; touch?: boolean }) {
+  if (touch) {
+    return (
+      <div
+        className="absolute inset-0 z-30 flex flex-col justify-end bg-black/75 backdrop-blur-sm"
+        onClick={onClose ? () => onClose() : undefined}
+      >
+        <div
+          className="safe-pb animate-sheetUp flex w-full flex-col items-center rounded-t-3xl border-t border-amber-200/20 bg-[#160f0a]/97 px-5 pb-5 pt-3 shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mb-3 h-1.5 w-11 rounded-full bg-white/25" />
+          <div className="no-scrollbar flex max-h-[78vh] w-full flex-col items-center overflow-y-auto">{children}</div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div
       className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/75 p-6 backdrop-blur-sm"
@@ -564,6 +617,7 @@ function Overlay({ children, onClose }: { children: React.ReactNode; onClose?: (
 
 /* --------------------------- mobile touch controls --------------------------- */
 function MobileControls({
+  touch,
   onMove,
   onAttack,
   onInteract,
@@ -571,6 +625,7 @@ function MobileControls({
   hasPrompt,
   canDash,
 }: {
+  touch: boolean;
   onMove: (x: number, y: number) => void;
   onAttack: () => void;
   onInteract: () => void;
@@ -578,15 +633,13 @@ function MobileControls({
   hasPrompt: boolean;
   canDash: boolean;
 }) {
-  const [touch, setTouch] = useState(false);
-  useEffect(() => {
-    setTouch(window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window);
-  }, []);
   if (!touch) return null;
   return (
-    <div className="absolute inset-x-0 bottom-0 z-20 flex items-end justify-between p-4 pb-6 safe-pb">
+    <>
+      {/* movement: dynamic-origin stick owning the lower-left quadrant */}
       <Joystick onMove={onMove} />
-      <div className="flex items-end gap-3">
+      {/* actions: bottom-right thumb cluster */}
+      <div className="safe-pb pointer-events-auto absolute bottom-0 right-0 z-20 flex items-end gap-3 p-4 pb-6">
         <div className="flex flex-col gap-3">
           {canDash && (
             <button
@@ -594,6 +647,7 @@ function MobileControls({
                 e.preventDefault();
                 onDash();
               }}
+              aria-label="Dash"
               className="flex h-12 w-12 items-center justify-center rounded-full border border-sky-300/40 bg-sky-500/25 text-lg text-sky-50 backdrop-blur-sm transition active:scale-90"
             >
               🌀
@@ -604,6 +658,7 @@ function MobileControls({
               e.preventDefault();
               onInteract();
             }}
+            aria-label="Interact"
             className={`flex h-14 w-14 items-center justify-center rounded-full border text-lg font-bold backdrop-blur-sm transition active:scale-90 ${
               hasPrompt
                 ? 'border-amber-300/60 bg-amber-400/30 text-amber-50 shadow-[0_0_14px_rgba(245,180,90,0.5)]'
@@ -618,67 +673,91 @@ function MobileControls({
             e.preventDefault();
             onAttack();
           }}
+          aria-label="Attack"
           className="flex h-20 w-20 items-center justify-center rounded-full border border-red-300/40 bg-red-500/25 text-2xl text-red-50 backdrop-blur-sm transition active:scale-90"
         >
           ⚔
         </button>
       </div>
-    </div>
+    </>
   );
 }
 
+// Dynamic-origin virtual stick: wherever the thumb lands in the lower-left
+// quadrant becomes the centre; tilt distance (clamped to R) drives the analog
+// move vector. No fixed target to find. Feeds onMove(dirX*mag, dirY*mag) — the
+// same shape the engine's setMoveAxis expects.
 function Joystick({ onMove }: { onMove: (x: number, y: number) => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const active = useRef(false);
+  const originRef = useRef<{ x: number; y: number } | null>(null);
+  const [base, setBase] = useState<{ x: number; y: number } | null>(null);
   const [knob, setKnob] = useState({ x: 0, y: 0 });
+  const pid = useRef<number | null>(null);
   const R = 46;
 
-  const handle = (clientX: number, clientY: number) => {
-    const el = ref.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const cx = r.left + r.width / 2;
-    const cy = r.top + r.height / 2;
-    let dx = clientX - cx;
-    let dy = clientY - cy;
-    const d = Math.hypot(dx, dy);
-    const m = Math.min(1, d / R);
-    if (d > 0) {
-      dx /= d;
-      dy /= d;
-    }
-    setKnob({ x: dx * R * m, y: dy * R * m });
-    onMove(dx * m, dy * m);
+  const end = () => {
+    pid.current = null;
+    originRef.current = null;
+    setBase(null);
+    setKnob({ x: 0, y: 0 });
+    onMove(0, 0);
   };
+
+  // never leave the player drifting if the stick unmounts mid-drag (onMove
+  // routes through a stable engine ref, so a mount-time closure is fine)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => () => onMove(0, 0), []);
 
   return (
     <div
-      ref={ref}
+      className="pointer-events-auto absolute bottom-0 left-0 z-20 h-[55%] w-[46%] touch-none"
       onPointerDown={(e) => {
+        if (pid.current !== null) return;
         e.preventDefault();
-        active.current = true;
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
-        handle(e.clientX, e.clientY);
+        pid.current = e.pointerId;
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        } catch {
+          /* capture is a nicety, not required */
+        }
+        originRef.current = { x: e.clientX, y: e.clientY };
+        setBase(originRef.current);
+        setKnob({ x: 0, y: 0 });
       }}
       onPointerMove={(e) => {
-        if (active.current) handle(e.clientX, e.clientY);
+        const o = originRef.current;
+        if (e.pointerId !== pid.current || !o) return;
+        let dx = e.clientX - o.x;
+        let dy = e.clientY - o.y;
+        const d = Math.hypot(dx, dy);
+        const m = Math.min(1, d / R);
+        if (d > 0) {
+          dx /= d;
+          dy /= d;
+        }
+        setKnob({ x: dx * R * m, y: dy * R * m });
+        onMove(dx * m, dy * m);
       }}
-      onPointerUp={() => {
-        active.current = false;
-        setKnob({ x: 0, y: 0 });
-        onMove(0, 0);
-      }}
-      onPointerCancel={() => {
-        active.current = false;
-        setKnob({ x: 0, y: 0 });
-        onMove(0, 0);
-      }}
-      className="relative h-28 w-28 touch-none rounded-full border border-amber-200/20 bg-black/35 backdrop-blur-sm"
+      onPointerUp={end}
+      onPointerCancel={end}
     >
-      <div
-        className="absolute left-1/2 top-1/2 h-12 w-12 rounded-full border border-amber-200/30 bg-amber-400/25"
-        style={{ transform: `translate(calc(-50% + ${knob.x}px), calc(-50% + ${knob.y}px))` }}
-      />
+      {/* resting hint when idle so the stick is discoverable */}
+      {!base && (
+        <div className="absolute bottom-6 left-6 h-24 w-24 rounded-full border border-amber-200/15 bg-black/20">
+          <div className="absolute left-1/2 top-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-200/25 bg-amber-400/10" />
+          <div className="absolute left-1/2 top-2 -translate-x-1/2 text-[8px] font-bold uppercase tracking-wider text-amber-100/35">
+            Move
+          </div>
+        </div>
+      )}
+      {base && (
+        <div className="pointer-events-none fixed z-20" style={{ left: base.x, top: base.y }}>
+          <div className="absolute h-28 w-28 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-amber-300/30 bg-black/30 backdrop-blur-[1px]" />
+          <div
+            className="absolute h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-amber-300/70 bg-amber-300/25 shadow-[0_0_20px_rgba(245,180,90,0.4)]"
+            style={{ transform: `translate(calc(-50% + ${knob.x}px), calc(-50% + ${knob.y}px))` }}
+          />
+        </div>
+      )}
     </div>
   );
 }
