@@ -144,8 +144,12 @@ export default function SkinnedCharacter({
   );
 }
 
-// HeadGear was authored in body-root space (head center y≈1.45, head width
-// 0.34). Inside the Head bone we counter-translate that origin and rescale.
+// HeadGear was authored in body-root space (primitive head center y≈1.45, head
+// 0.34 tall). The GLTF "Head" bone sits at the jaw/neck joint (native y≈1.547)
+// while the visible head extends up to the crown (~1.856), centered near 1.70.
+// So we counter-translate the authored origin, rescale, and lift it up onto the
+// face — 0.14/k lands glasses at eye level and hats/hair on the crown (measured
+// against the GLTF rest geometry; a smaller offset leaves features at the chin).
 function BoneGear({
   bone,
   k,
@@ -156,7 +160,7 @@ function BoneGear({
   appearance: PlayerAppearance;
 }) {
   return createPortal(
-    <group scale={0.62 / k} position={[0, 0.04 / k, 0]}>
+    <group scale={0.62 / k} position={[0, 0.14 / k, 0]}>
       <group position={[0, -1.45, 0]}>
         <HeadGear
           hat={appearance.hat}
