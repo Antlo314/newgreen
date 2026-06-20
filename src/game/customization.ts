@@ -41,7 +41,7 @@ export const CHARACTER_MODELS: CharacterModelDef[] = [
   {
     id: 'worker_m', name: 'The Builder', desc: 'Vest and boots, ready for the site.',
     file: '/models/character/modular/Worker.gltf',
-    slots: { shirt: ['Worker_Vest'], pants: ['Grey'], hat: ['Worker_Yellow'] },
+    slots: { shirt: ['Worker_Vest'], pants: ['Grey'] },
   },
   {
     id: 'casual_m', name: 'The Scholar', desc: 'Shirtsleeves rolled for honest work.',
@@ -71,7 +71,7 @@ export const CHARACTER_MODELS: CharacterModelDef[] = [
   {
     id: 'worker_f', name: 'The Foreman', desc: 'She runs the crew, not the other way.',
     file: '/models/character/modular/F_Worker.gltf',
-    slots: { shirt: ['Worker_Vest'], pants: ['Brown_02'], hat: ['Worker_Yellow'] },
+    slots: { shirt: ['Worker_Vest'], pants: ['Brown_02'] },
   },
 ];
 

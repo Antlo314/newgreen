@@ -19,7 +19,12 @@ import type { PlayerAppearance } from '../../src/game/types';
 const TARGET_HEIGHT = 1.78; // match the old primitive humanoid's world height
 
 const HAIR_MATERIALS = ['Hair', 'Hair_Brown', 'Hair_Blond'];
-const BROW_MATERIALS = ['Eyebrows', 'Moustache'];
+const BROW_MATERIALS = ['Eyebrows'];
+// Built-in headwear / facial hair baked into a model's head mesh. The hat and
+// facial-hair pickers are authoritative, so we hide these to avoid hats-on-hats
+// and un-removable moustaches (e.g. the Worker's hard hat & moustache). The same
+// Worker_Yellow material on the BODY mesh is a vest accent and is left intact.
+const HEAD_PROP_MATERIALS = ['Worker_Yellow', 'Moustache'];
 
 export type CharacterAction = 'auto' | 'interact' | 'talk' | 'wave';
 
@@ -62,11 +67,17 @@ export default function SkinnedCharacter({
       if (!mesh.isMesh) return;
       mesh.castShadow = true;
       mesh.frustumCulled = false; // skinned bounds lag the skeleton
+      const isHead = /head/i.test(mesh.name);
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       const recolored = mats.map((m) => {
         const sm = (m as THREE.MeshStandardMaterial).clone();
         const name = sm.name;
-        if (name === 'Skin') sm.color.set(appearance.skin);
+        if (isHead && HEAD_PROP_MATERIALS.includes(name)) {
+          // hide a model's built-in hat / moustache so the pickers control them
+          sm.transparent = true;
+          sm.opacity = 0;
+          sm.depthWrite = false;
+        } else if (name === 'Skin') sm.color.set(appearance.skin);
         else if (name === 'Skin_Darker') sm.color.set(appearance.skin).multiplyScalar(0.82);
         else if (HAIR_MATERIALS.includes(name)) {
           if (showModelHair) {
