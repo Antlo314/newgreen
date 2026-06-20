@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AdventureEngine, EngineSnapshot } from '../../src/adventure/engine';
 import { advAudio } from '../../src/adventure/audio';
 import { Appearance, DEFAULT_APPEARANCE, randomAppearance, sanitizeAppearance } from '../../src/adventure/appearance';
-import { SaveData, SAVE_KEY } from '../../src/adventure/types';
+import { SaveData, SAVE_KEY, SAVE_VERSION } from '../../src/adventure/types';
 import CharacterCreator from './CharacterCreator';
 
 type Phase = 'menu' | 'create' | 'play';
@@ -21,6 +21,7 @@ function loadSave(): SaveData | null {
     if (!raw) return null;
     const s = JSON.parse(raw) as SaveData;
     if (!s || typeof s !== 'object') return null;
+    if (s.v !== SAVE_VERSION) return null; // wrong/foreign save shape -> start fresh
     s.appearance = sanitizeAppearance(s.appearance);
     if (!Array.isArray(s.shards)) s.shards = [false, false, false, false];
     return s;
@@ -91,7 +92,9 @@ export default function AdventureGame() {
     engineRef.current = engine;
     (window as unknown as { __emberwilds?: AdventureEngine }).__emberwilds = engine;
     engine.start();
-    setWinDismissed(false);
+    // continuing an already-beaten save shouldn't re-flash the victory modal;
+    // only a fresh win during play should show it
+    setWinDismissed(usingSave && !!save?.bossDefeated);
 
     const autosave = window.setInterval(() => writeSave(engine.serialize()), 8000);
     const onHide = () => writeSave(engine.serialize());

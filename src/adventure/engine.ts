@@ -165,6 +165,7 @@ export class AdventureEngine {
   private fadeDir = 0; // -1 fading in, +1 fading out
   private pendingWarp: { map: string; x: number; y: number } | null = null;
   private deathT = 0;
+  private pruneT = 1; // periodic compaction of dead runtime drops/adds
 
   private raf = 0;
   private last = 0;
@@ -188,6 +189,11 @@ export class AdventureEngine {
     if (opts.initial) {
       this.applySave(opts.initial);
       this.map = this.maps[opts.initial.mapId] ?? this.maps.overworld;
+      // bad/missing saved position -> drop the player at the map spawn, not (0,0)
+      if (!Number.isFinite(opts.initial.x) || !Number.isFinite(opts.initial.y)) {
+        this.px = this.map.spawn.x;
+        this.py = this.map.spawn.y;
+      }
     } else {
       this.map = this.maps.overworld;
       this.px = this.map.spawn.x;
@@ -198,24 +204,27 @@ export class AdventureEngine {
 
   // -------------------------------------------------------------------- save
   private applySave(s: SaveData) {
-    this.hp = s.hp;
-    this.maxHp = s.maxHp;
-    this.embers = s.embers;
-    this.keys = s.keys;
-    this.shards = s.shards.slice(0, 4);
+    // finitize every numeric field so a partial / externally-edited save can't
+    // NaN out health or position (which would freeze the player with no recovery)
+    const num = (v: unknown, d: number) => (Number.isFinite(v as number) ? (v as number) : d);
+    this.maxHp = Math.max(2, num(s.maxHp, 6));
+    this.hp = Math.max(0, Math.min(this.maxHp, num(s.hp, this.maxHp)));
+    this.embers = Math.max(0, Math.floor(num(s.embers, 0)));
+    this.keys = Math.max(0, Math.floor(num(s.keys, 0)));
+    this.shards = (Array.isArray(s.shards) ? s.shards : []).slice(0, 4).map((b) => !!b);
     while (this.shards.length < 4) this.shards.push(false);
-    this.consumed = new Set(s.consumed ?? []);
-    this.openGates = new Set(s.openGates ?? []);
+    this.consumed = new Set(Array.isArray(s.consumed) ? s.consumed : []);
+    this.openGates = new Set(Array.isArray(s.openGates) ? s.openGates : []);
     this.lit = !!s.lit;
-    this.playtime = s.playtime ?? 0;
-    this.atk = s.atk ?? 1;
+    this.playtime = num(s.playtime, 0);
+    this.atk = Math.max(1, num(s.atk, 1));
     this.dashUnlocked = !!s.dash;
-    this.swift = s.swift ?? 0;
-    this.lightLvl = s.lightLvl ?? 0;
+    this.swift = Math.max(0, num(s.swift, 0));
+    this.lightLvl = Math.max(0, num(s.lightLvl, 0));
     this.bossDefeated = !!s.bossDefeated;
     this.won = !!s.bossDefeated;
-    this.px = s.x;
-    this.py = s.y;
+    this.px = num(s.x, 0);
+    this.py = num(s.y, 0);
   }
 
   serialize(): SaveData {
@@ -351,6 +360,11 @@ export class AdventureEngine {
   buyUpgrade(id: string) {
     const item = this.shopItems().find((i) => i.id === id);
     if (!item) return;
+    if (id === 'mend' && this.hp >= this.maxHp) {
+      advAudio.sfx('error');
+      this.opts.onToast('Already at full health.', 'info');
+      return;
+    }
     if (item.level >= item.max) {
       advAudio.sfx('error');
       return;
@@ -483,6 +497,17 @@ export class AdventureEngine {
     this.updateFloaters(dt);
     this.spawnAmbient(dt);
 
+    // compact dead runtime entities (collected drops, killed boss adds) ~1/s so
+    // the entity array can't grow unbounded over a long farming session. World
+    // entities (chests/shards/gates) are kept so reconcileMap/consumed still work.
+    this.pruneT -= dt;
+    if (this.pruneT <= 0) {
+      this.pruneT = 1;
+      this.map.entities = this.map.entities.filter(
+        (e) => !(e.removed && (e.id.startsWith('drop') || e.id.startsWith('add'))),
+      );
+    }
+
     // music mood: boss theme, danger when chased, else the zone theme
     if (!this.won) {
       if (this.bossActive && this.map.id === 'overworld') {
@@ -558,7 +583,12 @@ export class AdventureEngine {
       this.dashT -= dt;
       this.iframe = Math.max(this.iframe, this.dashT + 0.06);
       const sp = 320;
-      this.tryMove(this.dashDir[0] * sp * dt, this.dashDir[1] * sp * dt);
+      const dist = sp * dt;
+      // sub-step so a fast dash can't skip past a one-tile wall in a single frame
+      const steps = Math.max(1, Math.ceil(dist / 4));
+      for (let i = 0; i < steps; i++) {
+        this.tryMove((this.dashDir[0] * dist) / steps, (this.dashDir[1] * dist) / steps);
+      }
       this.moving = true;
       this.anim += dt * 14;
       this.particles.push({
@@ -698,9 +728,12 @@ export class AdventureEngine {
       return;
     }
     this.burst(e.x, e.y - 6, e.enemy === 'warden' ? '#7a3aa0' : '#6a4f8a', 14);
-    const n = e.enemy === 'warden' ? 6 : 1;
-    for (let i = 0; i < n; i++) this.dropPickup(e.x + (Math.random() - 0.5) * 16, e.y, 'ember');
-    if (Math.random() < (e.enemy === 'warden' ? 1 : 0.18)) this.dropPickup(e.x, e.y, 'heart');
+    // summoned boss adds give no loot, so the wraith fight can't be farmed forever
+    if (!e.id.startsWith('add')) {
+      const n = e.enemy === 'warden' ? 6 : 1;
+      for (let i = 0; i < n; i++) this.dropPickup(e.x + (Math.random() - 0.5) * 16, e.y, 'ember');
+      if (Math.random() < (e.enemy === 'warden' ? 1 : 0.18)) this.dropPickup(e.x, e.y, 'heart');
+    }
     if (e.enemy === 'warden') this.opts.onToast('The Warden falls! The way is clear.', 'good');
   }
 
@@ -804,8 +837,8 @@ export class AdventureEngine {
       if (!this.enemyBlocked(nx, e.y, e)) e.x = nx;
       if (!this.enemyBlocked(e.x, ny, e)) e.y = ny;
 
-      // contact damage
-      if (!this.dead && this.iframe <= 0 && dist < (e.r ?? 6) + 6) {
+      // contact damage — not while frozen in a dialog/shop (you can't dodge)
+      if (!this.dead && !this.dialog && !this.shopOpen && this.iframe <= 0 && dist < (e.r ?? 6) + 6) {
         this.damagePlayer(e.touch ?? 1, e.x, e.y);
       }
     }
@@ -851,7 +884,12 @@ export class AdventureEngine {
   private respawn() {
     this.dead = false;
     this.hp = this.maxHp;
-    this.iframe = IFRAME * 1.5;
+    this.iframe = IFRAME * 2.5; // generous grace so a live boss/adds can't chain-hit on wake
+    // shove a still-living boss back to its home so respawn isn't a death trap
+    if (this.boss && !this.boss.removed) {
+      this.boss.x = this.boss.homeX ?? this.boss.x;
+      this.boss.y = this.boss.homeY ?? this.boss.y;
+    }
     const ow = this.maps.overworld;
     if (this.map.id !== 'overworld') {
       this.map = ow;
@@ -1257,7 +1295,7 @@ export class AdventureEngine {
     if (this.bossDefeated) return 'The Emberwilds are saved. Roam free, Wayfarer.';
     if (this.bossActive) return 'Defeat the Hollow Wraith at the glade!';
     const got = this.shards.filter(Boolean).length;
-    if (got >= 4) return 'Return to the Lantern Tree and light it.';
+    if (got >= 4) return this.lit ? 'Return to the Lantern Tree to face the Hollow.' : 'Return to the Lantern Tree and light it.';
     return `Recover the Ember Shards — ${got}/4 (meadow, woods, shore, cavern).`;
   }
 

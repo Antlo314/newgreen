@@ -221,6 +221,46 @@ function passiveIncomePerTick(plots: Plot[], circulation: number, legacyMult = 1
   return base * mult * legacyMult * INCOME_SCALE;
 }
 
+/** What the town actually earns this tick under CURRENT conditions — mirrors the
+ *  live economy tick (per-building night factor, active fortune, hunger penalty,
+ *  night civic bonus, and food/goods trade income). Used for the Market Rush so
+ *  the windfall tracks the visible economy (a night rush on day-shops pays the
+ *  night rate, a rush during a panic pays less). Offline payout keeps the simpler
+ *  passiveIncomePerTick since it can't simulate food/goods/time over hours. */
+function currentIncomePerTick(s: GameState): number {
+  const levelOf = (id: BuildingId) =>
+    s.plots.reduce((sum, p) => (p.building === id && p.construction === 0 ? sum + p.level : sum), 0);
+  const population = deriveResidents(s.plots).length;
+  const cottages = s.plots.filter((p) => p.building === 'cottage' && p.construction === 0).length;
+  const gardens = s.plots.filter((p) => p.building === 'garden' && p.construction === 0).length;
+  const mult =
+    (1 + cottages * COTTAGE_INCOME_BONUS + gardens * GARDEN_INCOME_BONUS) *
+    (s.circulation || 1) *
+    (population > 0 && !s.townFed ? 0.8 : 1);
+  let income = 0;
+  for (const p of s.plots) {
+    if (!p.building || p.construction > 0) continue;
+    income +=
+      BUILDINGS[p.building].income *
+      p.level *
+      incomeTimeFactor(p.building, s.timeOfDay) *
+      adjacencyInfo(p.building, p.x, p.z, s.plots, p.id).mult;
+  }
+  const foodSold = Math.min(Math.max(0, Math.floor(s.food - PANTRY_BUFFER)), 2 * levelOf('grocery'));
+  const goodsSold = Math.min(s.goods, levelOf('sugarbowl') + levelOf('hotel') + levelOf('cultural_hall'));
+  income += foodSold * FOOD_PRICE + goodsSold * GOODS_PRICE;
+  return (
+    income *
+    mult *
+    (s.fortune?.incomeMult ?? 1) *
+    legacyMultiplier(s.legacy) *
+    INCOME_SCALE *
+    boonIncomeMult(s.quests) *
+    civicIncomeMult(s.civics) *
+    (isNightTime(s.timeOfDay) ? civicNightMult(s.civics) : 1)
+  );
+}
+
 interface GameState {
   phase: GamePhase;
   hasSave: boolean;
@@ -1562,12 +1602,9 @@ export const useGame = create<GameState>((set, get) => {
       if (!ev) return;
       set({ activeEvent: null, nextEventIn: rand(EVENT_MIN_GAP, EVENT_MAX_GAP) });
       if (ev.kind === 'rush') {
-        const perTick = passiveIncomePerTick(
-          s.plots,
-          s.circulation,
-          legacyMultiplier(s.legacy) * boonIncomeMult(s.quests) * civicIncomeMult(s.civics)
-        );
-        const reward = Math.max(RUSH_MIN, Math.round(perTick * RUSH_TICK_VALUE * rand(0.8, 1.4)));
+        // pay a multiple of what the town earns RIGHT NOW (night/fortune/hunger
+        // aware), so the rush stays consistent with the visible economy
+        const reward = Math.max(RUSH_MIN, Math.round(currentIncomePerTick(s) * RUSH_TICK_VALUE * rand(0.8, 1.4)));
         earn(reward);
         audio.sfx('coin');
         audio.sfx('crit');

@@ -7,6 +7,8 @@ import SkinnedCharacter from './SkinnedCharacter';
 import { WalkRef } from './Humanoid';
 import { useGame } from '../../src/game/store';
 import { deriveResidents, type Resident } from '../../src/game/residents';
+import { isNightTime } from '../../src/game/data';
+import { RIVER_X } from '../../src/game/world';
 
 // Residents walk the district on a simple schedule: workplaces and the plaza
 // by day, home at dusk (they step "indoors" and hide for the night).
@@ -26,8 +28,10 @@ export default function Residents() {
   );
 }
 
+// share the one dusk boundary used by income/lamps so townsfolk don't keep
+// strolling for a sliver of dusk after night has otherwise begun
 function isNight(t: number) {
-  return t < 0.27 || t > 0.75;
+  return isNightTime(t);
 }
 
 function ResidentActor({ r }: { r: Resident }) {
@@ -61,8 +65,12 @@ function ResidentActor({ r }: { r: Resident }) {
         z: r.home.z + (Math.random() - 0.5) * 7,
       };
     }
-    // keep townsfolk west of the river
-    if (target.current.x > 18) target.current.x = 18;
+    // keep townsfolk on their OWN bank so pathing never cuts across the river
+    if (r.home.x > RIVER_X) {
+      if (target.current.x < RIVER_X + 4) target.current.x = RIVER_X + 4;
+    } else if (target.current.x > 18) {
+      target.current.x = 18;
+    }
   };
 
   useFrame((_, rawDt) => {

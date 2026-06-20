@@ -151,6 +151,10 @@ class AdventureAudio {
 
   private schedule() {
     if (!this.ctx || !this.musicGain || !this.mood) return;
+    // if the tab was backgrounded (or this is the first unlock), the audio clock
+    // ran ahead of nextTime — resync instead of replaying a backlog of past-
+    // timestamp notes, which would otherwise fire all at once as a glitchy burst
+    if (this.nextTime < this.ctx.currentTime) this.nextTime = this.ctx.currentTime + 0.05;
     const track = SCORES[this.mood];
     const lookahead = 0.3;
     while (this.nextTime < this.ctx.currentTime + lookahead) {
